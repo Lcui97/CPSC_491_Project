@@ -1,0 +1,1 @@
+If no JWT → redirect to Login.
