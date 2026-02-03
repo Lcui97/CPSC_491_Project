@@ -1,4 +1,4 @@
-# 🧠 BrainKB
+# 🧠
 ### *Your Second Brain, Augmented by AI*
 
 BrainKB is a full-stack personal knowledge management system designed to turn static notes and textbooks into an interactive, visual, and intelligent "knowledge graph." 
