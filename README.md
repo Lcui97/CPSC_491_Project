@@ -18,20 +18,21 @@ The core philosophy: **Upload → Chat → Visualize → Validate.**
 
 🧪 Getting Started
 1. Backend Setup (Flask)
-Bash
 cd atlus/backend
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env
+
+
 Note: Ensure your .env contains a valid JWT_SECRET_KEY and GOOGLE_CLIENT_ID.
 
 2. Frontend Setup (React)
-Bash
 cd atlus/frontend
 npm install
 cp .env.example .env
 npm run dev
+
 
 🗺️ Roadmap
 
