@@ -18,19 +18,33 @@ The core philosophy: **Upload → Chat → Visualize → Validate.**
 
 🧪 Getting Started
 1. Backend Setup (Flask)
+Bash
+# Navigate to backend directory
 cd atlus/backend
+
+# Create and activate virtual environment
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
+
+# Install dependencies
 pip install -r requirements.txt
+
+# Copy environment template
 cp .env.example .env
-
-
 Note: Ensure your .env contains a valid JWT_SECRET_KEY and GOOGLE_CLIENT_ID.
 
 2. Frontend Setup (React)
+Bash
+# Navigate to frontend directory
 cd atlus/frontend
+
+# Install dependencies
 npm install
+
+# Copy environment template
 cp .env.example .env
+
+# Start development server
 npm run dev
 
 
