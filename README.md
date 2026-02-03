@@ -34,6 +34,7 @@ cp .env.example .env
 npm run dev
 
 🗺️ Roadmap
+
 [x] Phase 0: JWT & Google OAuth Integration.
 
 [x] Phase 1: Dashboard UI & Protected Routing.
