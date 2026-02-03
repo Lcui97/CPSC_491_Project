@@ -1,55 +1,32 @@
-# =========================
-# OS / Editor
-# =========================
+# OS / Editors
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
 
 # =========================
-# Python / Flask (backend)
+# Backend (Flask / Python)
 # =========================
-backend/__pycache__/
-backend/**/*.pyc
-backend/**/*.pyo
-backend/**/*.pyd
-backend/.pytest_cache/
-backend/.mypy_cache/
-backend/.coverage
-backend/htmlcov/
-
-# Virtual environments
-backend/venv/
-backend/.venv/
-backend/env/
-
-# Flask instance / local DBs
-backend/instance/
-backend/*.db
-backend/*.sqlite3
-
-# Environment variables
-backend/.env
-
-# Alembic cache
-backend/migrations/versions/*.pyc
+atlus/backend/venv/
+atlus/backend/.venv/
+atlus/backend/env/
+atlus/backend/__pycache__/
+atlus/backend/**/*.pyc
+atlus/backend/.env
+atlus/backend/*.db
+atlus/backend/*.sqlite3
 
 # =========================
-# Node / React (frontend)
+# Frontend (React / Node)
 # =========================
-frontend/node_modules/
-frontend/dist/
-frontend/.vite/
-frontend/.cache/
-frontend/.env
-
-# Logs
-frontend/npm-debug.log*
-frontend/yarn-debug.log*
-frontend/yarn-error.log*
+atlus/frontend/node_modules/
+atlus/frontend/dist/
+atlus/frontend/.env
+atlus/frontend/.vite/
+atlus/frontend/.cache/
 
 # =========================
-# Data folders (VERY IMPORTANT)
+# Data / uploads
 # =========================
 data/
 uploads/
@@ -58,15 +35,5 @@ uploads/
 *.jpg
 *.jpeg
 
-# =========================
-# Docker
-# =========================
+# Logs
 *.log
-docker-compose.override.yml
-
-# =========================
-# Misc
-# =========================
-*.swp
-*.bak
-*.tmp
