@@ -1,86 +1,56 @@
-🧠 — AI-Powered Personal Knowledge Base
+# 🧠 BrainKB — AI Personal Knowledge Base
 
-BrainKB is a web app that lets you chat with your own notes and textbooks, automatically build a concept graph (“brain”) from them, and compare your notes against authoritative sources to find gaps or mistakes.
+BrainKB is a full-stack web app designed to become your **personal AI knowledge system**.
 
-This project is built with:
+The goal is simple:
 
-Flask (backend API)
+> Upload your notes and textbooks → chat with them → generate a concept map (“brain”) → compare your understanding to authoritative sources.
 
-React + Vite (frontend)
+This project is being built **from the ground up**, starting with authentication and a clean architecture that will scale into:
 
-PostgreSQL (database)
+- Document ingestion (notes + textbooks)
+- OCR for handwritten notes
+- Vector search (RAG chat)
+- Concept graph visualization (like Obsidian)
+- Automatic comparison of your notes vs textbooks to find gaps or mistakes
 
-Chroma / Pinecone (vector database — later)
+---
 
-OpenAI API (embeddings, reasoning — later)
+## 🚧 Current Stage (MVP Foundation)
+
+Right now the project includes:
+
+- Flask backend with JWT authentication
+- Google Sign-In
+- React frontend with protected routes
+- Dark theme dashboard Home screen
+- Clean structure ready for document + AI features
+
+This is the foundation everything else will build on.
+
+---
 
 
-⚙️ Prerequisites
+---
 
-Make sure you have installed:
+## ⚙️ Tech Stack
 
-Python 3.10+
+| Layer | Technology |
+|---|---|
+| Backend | Flask, JWT, SQLAlchemy |
+| Frontend | React, Vite, Tailwind |
+| Auth | Email/Password + Google OAuth |
+| Database | SQLite (dev) → PostgreSQL (later) |
+| AI (next phase) | OpenAI, Chroma/Pinecone |
 
-Node.js 18+
+---
 
-Git
+## 🧪 How to Run the Project
 
+### 🔐 Backend (Flask)
 
-🔐 Backend Setup (Flask)
-1. Go to backend
-cd backend
-
-2. Create virtual environment
+```bash
+cd atlus/backend
 python -m venv venv
-source venv/bin/activate      # Mac/Linux
-venv\Scripts\activate         # Windows
-
-3. Install dependencies
+# activate venv
 pip install -r requirements.txt
-
-4. Create .env file
-
-Create backend/.env:
-
-SECRET_KEY=supersecret
-JWT_SECRET_KEY=superjwtsecret
-SQLALCHEMY_DATABASE_URI=sqlite:///app.db
-
-5. Run the server
-python run.py
-
-
-Backend runs on:
-
-http://127.0.0.1:5000
-
-💻 Frontend Setup (React + Vite)
-1. Go to frontend
-cd frontend
-
-2. Install dependencies
-npm install
-
-3. Create .env
-
-Create frontend/.env:
-
-VITE_API_URL=http://127.0.0.1:5000
-
-4. Start frontend
-npm run dev
-
-
-Frontend runs on:
-
-http://localhost:5173
-
-🔄 How It Works (Current)
-
-User registers or logs in
-
-Flask returns a JWT token
-
-React stores token in localStorage
-
-Protected /home page verifies the user
