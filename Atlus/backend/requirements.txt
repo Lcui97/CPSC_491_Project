@@ -4,3 +4,5 @@ flask-sqlalchemy
 flask-jwt-extended
 python-dotenv
 bcrypt
+google-auth
+requests

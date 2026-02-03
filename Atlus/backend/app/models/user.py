@@ -1,7 +1,10 @@
-User table:
+from app.extensions import db
 
-id
 
-email
+class User(db.Model):
+    __tablename__ = "users"
 
-password_hash
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(255), unique=True, nullable=False, index=True)
+    password_hash = db.Column(db.String(255), nullable=True)
+    role = db.Column(db.String(32), nullable=False, default="user")  # "user" | "admin"

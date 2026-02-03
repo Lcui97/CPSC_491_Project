@@ -1,3 +1,25 @@
-login()
+// Use '' so in dev we hit same origin (Vite proxy forwards /api to backend). Set VITE_API_URL for production.
+const API_URL = import.meta.env.VITE_API_URL ?? '';
 
-register()
+async function request(path, body) {
+  const res = await fetch(`${API_URL}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw Object.assign(new Error(data.error || res.statusText), { status: res.status, data });
+  return data;
+}
+
+export async function register(email, password) {
+  return request('/api/register', { email, password });
+}
+
+export async function login(email, password) {
+  return request('/api/login', { email, password });
+}
+
+export async function googleLogin(credential) {
+  return request('/api/auth/google', { credential });
+}
