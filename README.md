@@ -1,4 +1,4 @@
-# 🧠 BrainKB — AI Personal Knowledge Base
+# 🧠 — AI Personal Knowledge Base
 
 BrainKB is a full-stack web app designed to become your **personal AI knowledge system**.
 
