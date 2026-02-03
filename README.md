@@ -1,56 +1,78 @@
-# 🧠 — AI Personal Knowledge Base
+# 🧠 BrainKB
+### *Your Second Brain, Augmented by AI*
 
-BrainKB is a full-stack web app designed to become your **personal AI knowledge system**.
+BrainKB is a full-stack personal knowledge management system designed to turn static notes and textbooks into an interactive, visual, and intelligent "knowledge graph." 
 
-The goal is simple:
-
-> Upload your notes and textbooks → chat with them → generate a concept map (“brain”) → compare your understanding to authoritative sources.
-
-This project is being built **from the ground up**, starting with authentication and a clean architecture that will scale into:
-
-- Document ingestion (notes + textbooks)
-- OCR for handwritten notes
-- Vector search (RAG chat)
-- Concept graph visualization (like Obsidian)
-- Automatic comparison of your notes vs textbooks to find gaps or mistakes
+The core philosophy: **Upload → Chat → Visualize → Validate.**
 
 ---
 
-## 🚧 Current Stage (MVP Foundation)
+## 🔬 Core AI Logic (The Math)
 
-Right now the project includes:
+BrainKB uses Vector Embeddings to link your notes. The relationship between your personal notes ($N$) and textbook concepts ($T$) is determined by **Cosine Similarity**:
 
-- Flask backend with JWT authentication
-- Google Sign-In
-- React frontend with protected routes
-- Dark theme dashboard Home screen
-- Clean structure ready for document + AI features
+$$\text{similarity} = \cos(\theta) = \frac{\mathbf{N} \cdot \mathbf{T}}{\|\mathbf{N}\| \|\mathbf{T}\|}$$
 
-This is the foundation everything else will build on.
+For the **RAG (Retrieval-Augmented Generation)** pipeline, we retrieve the top-$k$ context blocks ($C$) based on a user query ($q$):
 
----
+$$C = \text{arg max}_{c \in D} \sum_{i=1}^{k} \text{score}(q, c_i)$$
 
+This allows the AI to ground its answers in your specific data rather than general training knowledge.
 
 ---
 
-## ⚙️ Tech Stack
+## 🛠️ Tech Stack
 
 | Layer | Technology |
 |---|---|
-| Backend | Flask, JWT, SQLAlchemy |
-| Frontend | React, Vite, Tailwind |
-| Auth | Email/Password + Google OAuth |
-| Database | SQLite (dev) → PostgreSQL (later) |
-| AI (next phase) | OpenAI, Chroma/Pinecone |
+| **Frontend** | React 18, Vite, Tailwind CSS |
+| **Backend** | Flask (Python), SQLAlchemy |
+| **Authentication** | JWT, Google OAuth 2.0 |
+| **Database** | SQLite (Dev) → PostgreSQL (Prod) |
+| **AI/ML** | OpenAI API, ChromaDB, LangChain |
 
 ---
 
-## 🧪 How to Run the Project
+## 🏗️ Project Structure
 
-### 🔐 Backend (Flask)
+```text
+brainkb/
+├── atlus/
+│   ├── backend/          # Flask API & Database models
+│   │   ├── migrations/   # Database version control
+│   │   └── run.py        # Entry point
+│   └── frontend/         # React + Vite application
+│       ├── src/
+│       │   ├── components/
+│       │   └── pages/
+│       └── tailwind.config.js
+└── README.md
 
-```bash
+🧪 Getting Started
+1. Backend Setup (Flask)
+Bash
 cd atlus/backend
 python -m venv venv
-# activate venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
+cp .env.example .env
+Note: Ensure your .env contains a valid JWT_SECRET_KEY and GOOGLE_CLIENT_ID.
+
+2. Frontend Setup (React)
+Bash
+cd atlus/frontend
+npm install
+cp .env.example .env
+npm run dev
+🗺️ Roadmap
+[x] Phase 0: JWT & Google OAuth Integration.
+
+[x] Phase 1: Dashboard UI & Protected Routing.
+
+[ ] Phase 2: Document Ingestion (PDF/Markdown/OCR).
+
+[ ] Phase 3: Vector Embeddings & Similarity Search.
+
+[ ] Phase 4: Obsidian-style Knowledge Graph Visualization.
+
+[ ] Phase 5: Knowledge Gap Analysis (Notes vs. Textbooks).
