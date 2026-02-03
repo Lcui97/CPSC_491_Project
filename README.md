@@ -5,22 +5,6 @@ BrainKB is a full-stack personal knowledge management system designed to turn st
 
 The core philosophy: **Upload → Chat → Visualize → Validate.**
 
----
-
-## 🔬 Core AI Logic (The Math)
-
-BrainKB uses Vector Embeddings to link your notes. The relationship between your personal notes ($N$) and textbook concepts ($T$) is determined by **Cosine Similarity**:
-
-$$\text{similarity} = \cos(\theta) = \frac{\mathbf{N} \cdot \mathbf{T}}{\|\mathbf{N}\| \|\mathbf{T}\|}$$
-
-For the **RAG (Retrieval-Augmented Generation)** pipeline, we retrieve the top-$k$ context blocks ($C$) based on a user query ($q$):
-
-$$C = \text{arg max}_{c \in D} \sum_{i=1}^{k} \text{score}(q, c_i)$$
-
-This allows the AI to ground its answers in your specific data rather than general training knowledge.
-
----
-
 ## 🛠️ Tech Stack
 
 | Layer | Technology |
@@ -31,22 +15,6 @@ This allows the AI to ground its answers in your specific data rather than gener
 | **Database** | SQLite (Dev) → PostgreSQL (Prod) |
 | **AI/ML** | OpenAI API, ChromaDB, LangChain |
 
----
-
-## 🏗️ Project Structure
-
-```text
-brainkb/
-├── atlus/
-│   ├── backend/          # Flask API & Database models
-│   │   ├── migrations/   # Database version control
-│   │   └── run.py        # Entry point
-│   └── frontend/         # React + Vite application
-│       ├── src/
-│       │   ├── components/
-│       │   └── pages/
-│       └── tailwind.config.js
-└── README.md
 
 🧪 Getting Started
 1. Backend Setup (Flask)
@@ -64,6 +32,7 @@ cd atlus/frontend
 npm install
 cp .env.example .env
 npm run dev
+
 🗺️ Roadmap
 [x] Phase 0: JWT & Google OAuth Integration.
 
