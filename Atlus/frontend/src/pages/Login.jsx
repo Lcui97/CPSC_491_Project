@@ -61,10 +61,27 @@ export default function Login() {
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
   return (
-    <div className="min-h-screen bg-[rgb(var(--bg))] text-[rgb(var(--text))] flex items-center justify-center p-4">
-      <div className="w-full max-w-sm bg-[rgb(var(--panel))] border border-[rgb(var(--border))] rounded-xl p-6 shadow-xl">
+    <div className="min-h-screen bg-[#EBE6DF] text-[rgb(var(--text))] flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Subtle geometric accents */}
+      <div className="absolute top-0 right-0 w-64 h-64 opacity-20">
+        <svg viewBox="0 0 100 100" className="w-full h-full">
+          <defs>
+            <linearGradient id="login-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#F5D547" />
+              <stop offset="100%" stopColor="#E76F51" />
+            </linearGradient>
+          </defs>
+          <polygon points="100,0 100,100 0,50" fill="url(#login-grad)" />
+        </svg>
+      </div>
+      <div className="absolute bottom-0 left-0 w-48 h-48 opacity-10">
+        <svg viewBox="0 0 100 100" className="w-full h-full">
+          <polygon points="0,100 0,0 100,100" fill="#59524F" />
+        </svg>
+      </div>
+      <div className="w-full max-w-sm bg-white/90 backdrop-blur border border-[rgb(var(--border))] rounded-xl p-6 shadow-lg relative z-10">
         <div className="text-center mb-6">
-          <h1 className="text-xl font-semibold text-[rgb(var(--text))]">BrainKB</h1>
+          <h1 className="text-xl font-semibold text-[rgb(var(--text))]">Atlus</h1>
           <p className="text-sm text-[rgb(var(--muted))] mt-1">Your knowledge base, connected.</p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -74,7 +91,7 @@ export default function Login() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            className="w-full px-3 py-2 rounded-lg bg-[rgb(var(--panel2))] border border-[rgb(var(--border))] text-[rgb(var(--text))] placeholder:text-[rgb(var(--muted))] focus:outline-none focus:ring-2 focus:ring-[rgb(var(--accent))]"
+            className="w-full px-3 py-2 rounded-lg bg-[#EBE6DF]/60 border border-[rgb(var(--border))] text-[rgb(var(--text))] placeholder:text-[rgb(var(--muted))] focus:outline-none focus:ring-2 focus:ring-[rgb(var(--accent))]"
           />
           <input
             type="password"
@@ -82,7 +99,7 @@ export default function Login() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required={!isRegister}
-            className="w-full px-3 py-2 rounded-lg bg-[rgb(var(--panel2))] border border-[rgb(var(--border))] text-[rgb(var(--text))] placeholder:text-[rgb(var(--muted))] focus:outline-none focus:ring-2 focus:ring-[rgb(var(--accent))]"
+            className="w-full px-3 py-2 rounded-lg bg-[#EBE6DF]/60 border border-[rgb(var(--border))] text-[rgb(var(--text))] placeholder:text-[rgb(var(--muted))] focus:outline-none focus:ring-2 focus:ring-[rgb(var(--accent))]"
           />
           {error && (
             <p className="text-sm text-red-400">{error}</p>
@@ -98,7 +115,7 @@ export default function Login() {
             <button
               type="button"
               onClick={() => { setIsRegister((v) => !v); setError(''); }}
-              className="py-2 px-4 rounded-lg border border-[rgb(var(--border))] text-[rgb(var(--muted))] hover:bg-[rgb(var(--panel2))] transition-colors text-sm"
+              className="py-2 px-4 rounded-lg border border-[rgb(var(--border))] text-[rgb(var(--muted))] hover:bg-[#EBE6DF]/60 transition-colors text-sm"
             >
               {isRegister ? 'Login' : 'Register'}
             </button>

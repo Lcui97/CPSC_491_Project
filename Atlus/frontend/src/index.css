@@ -3,14 +3,14 @@
 @tailwind utilities;
 
 :root {
-  --bg: 15 23 42;           /* slate-900 */
-  --panel: 30 41 59;        /* slate-800 */
-  --panel2: 51 65 85;       /* slate-700 */
-  --border: 71 85 105;      /* slate-600 */
-  --text: 226 232 240;      /* slate-200 */
-  --muted: 148 163 184;     /* slate-400 */
-  --accent: 99 102 241;    /* indigo-500 */
-  --accentHover: 79 70 229; /* indigo-600 */
+  --bg: 235 230 223;        /* light beige #EBE6DF */
+  --panel: 245 242 238;     /* slightly lighter */
+  --panel2: 232 227 221;    /* soft shadow tone */
+  --border: 201 192 182;    /* warm grey border */
+  --text: 89 82 79;         /* charcoal #59524F */
+  --muted: 130 120 115;     /* muted charcoal */
+  --accent: 231 111 81;     /* coral #E76F51 */
+  --accentHover: 209 90 60; /* darker coral */
 }
 
 body {
