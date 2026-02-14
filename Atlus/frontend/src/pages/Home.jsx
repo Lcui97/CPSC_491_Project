@@ -1,23 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api } from '../api/client';
 import TopBar from '../components/home/TopBar';
 import BrainFilters from '../components/home/BrainFilters';
 import GraphView from '../components/home/GraphView';
 import BrainNotesView from '../components/home/BrainNotesView';
+import SearchPrompter from '../components/home/SearchPrompter';
 
 export default function Home() {
   const navigate = useNavigate();
   const [sidebarExpanded, setSidebarExpanded] = useState(true);
   const [activeBrain, setActiveBrain] = useState(null);
-
-  useEffect(() => {
-    api('/home').catch(() => {
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('refresh_token');
-      navigate('/login', { replace: true });
-    });
-  }, [navigate]);
 
   return (
     <div className="min-h-screen bg-[rgb(var(--bg))] text-[rgb(var(--text))] flex flex-col">
@@ -33,7 +25,10 @@ export default function Home() {
               <div className="p-4">
                 <BrainFilters
                   activeBrainId={activeBrain?.id}
-                  onEnterBrain={setActiveBrain}
+                  onEnterBrain={(brain) => {
+                    setActiveBrain(brain);
+                    navigate(`/brain/${brain.id}/notes`);
+                  }}
                   onCollapseSidebar={() => setSidebarExpanded(false)}
                 />
               </div>
@@ -53,12 +48,21 @@ export default function Home() {
             )}
           </div>
         </aside>
-        <div className="flex-1 p-4 overflow-auto">
-          {activeBrain ? (
-            <BrainNotesView brain={activeBrain} onBack={() => setActiveBrain(null)} />
-          ) : (
-            <GraphView />
-          )}
+        <div className="flex-1 flex flex-col p-4 overflow-auto">
+          <div className="shrink-0 mb-4 max-w-2xl">
+            <SearchPrompter
+              onSelectNode={(node) => {
+                if (node?.brain_id) navigate(`/brain/${node.brain_id}/notes/${node.id}`);
+              }}
+            />
+          </div>
+          <div className="flex-1 min-h-0">
+            {activeBrain ? (
+              <BrainNotesView brain={activeBrain} onBack={() => setActiveBrain(null)} />
+            ) : (
+              <GraphView />
+            )}
+          </div>
         </div>
       </main>
     </div>

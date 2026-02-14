@@ -1,4 +1,4 @@
-from flask import Blueprint, request
+from flask import Blueprint, request, jsonify
 from flask_jwt_extended import (
     create_access_token,
     create_refresh_token,
@@ -14,6 +14,12 @@ from app.utils.security import check_password, hash_password
 bp = Blueprint("auth", __name__)
 
 
+@bp.route("/health", methods=["GET"])
+def health():
+    """No-auth check that backend is reachable."""
+    return jsonify({"status": "ok"})
+
+
 @bp.route("/register", methods=["POST"])
 def register():
     data = request.get_json() or {}
@@ -21,15 +27,15 @@ def register():
     password = data.get("password") or ""
 
     if not email or not password:
-        return {"error": "email and password required"}, 400
+        return jsonify({"error": "email and password required"}), 400
 
     if User.query.filter_by(email=email).first():
-        return {"error": "email already registered"}, 409
+        return jsonify({"error": "email already registered"}), 409
 
     user = User(email=email, password_hash=hash_password(password), role="user")
     db.session.add(user)
     db.session.commit()
-    return {"message": "created"}, 201
+    return jsonify({"message": "created"}), 201
 
 
 @bp.route("/login", methods=["POST"])
@@ -39,15 +45,16 @@ def login():
     password = data.get("password") or ""
 
     if not email or not password:
-        return {"error": "email and password required"}, 400
+        return jsonify({"error": "email and password required"}), 400
 
     user = User.query.filter_by(email=email).first()
     if not user or not user.password_hash or not check_password(password, user.password_hash):
-        return {"error": "invalid credentials"}, 401
+        return jsonify({"error": "invalid credentials"}), 401
 
-    access_token = create_access_token(identity=user.id)
-    refresh_token = create_refresh_token(identity=user.id)
-    return {"access_token": access_token, "refresh_token": refresh_token}
+    # Keep JWT subject as string for broad compatibility with JWT validators.
+    access_token = create_access_token(identity=str(user.id))
+    refresh_token = create_refresh_token(identity=str(user.id))
+    return jsonify({"access_token": access_token, "refresh_token": refresh_token})
 
 
 @bp.route("/refresh", methods=["POST"])
@@ -55,11 +62,15 @@ def login():
 def refresh():
     """Exchange a valid refresh token for a new access token. Call with Authorization: Bearer <refresh_token>."""
     user_id = get_jwt_identity()
+    try:
+        user_id = int(user_id)
+    except (TypeError, ValueError):
+        pass
     user = User.query.get(user_id)
     if not user:
-        return {"error": "user not found"}, 404
-    access_token = create_access_token(identity=user.id)
-    return {"access_token": access_token}
+        return jsonify({"error": "user not found"}), 404
+    access_token = create_access_token(identity=str(user.id))
+    return jsonify({"access_token": access_token})
 
 
 @bp.route("/logout", methods=["POST"])
@@ -67,4 +78,4 @@ def refresh():
 def logout():
     """Client should clear access_token and refresh_token from storage after calling this."""
     # Optional: add refresh token to a blacklist here if you store them server-side
-    return {"message": "ok"}, 200
+    return jsonify({"message": "ok"}), 200

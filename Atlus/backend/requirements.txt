@@ -6,3 +6,10 @@ python-dotenv
 bcrypt
 google-auth
 requests
+# Document ingestion & knowledge graph
+PyPDF2
+openai
+pinecone
+# OCR for handwritten notes (optional: install tesseract for pytesseract, or use easyocr)
+easyocr
+pillow

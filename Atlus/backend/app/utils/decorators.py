@@ -11,6 +11,10 @@ def admin_required(fn):
     @wraps(fn)
     def wrapper(*args, **kwargs):
         user_id = get_jwt_identity()
+        try:
+            user_id = int(user_id)
+        except (TypeError, ValueError):
+            return jsonify({"error": "admin required"}), 403
         user = User.query.get(user_id)
         if not user or user.role != "admin":
             return jsonify({"error": "admin required"}), 403

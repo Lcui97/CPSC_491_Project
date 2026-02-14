@@ -1,7 +1,7 @@
-import { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { GoogleLogin } from '@react-oauth/google';
-import { register, login, googleLogin } from '../api/auth';
+import { register, login, googleLogin, checkBackendHealth } from '../api/auth';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -9,9 +9,19 @@ export default function Login() {
   const [isRegister, setIsRegister] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
+  const [backendOk, setBackendOk] = useState(null);
   const location = useLocation();
-  const from = location.state?.from?.pathname || '/home';
+  const navigate = useNavigate();
+  const from = (location.state?.from?.pathname) || '/home';
+  const targetPath = (from && from !== '/login') ? (from.startsWith('/') ? from : `/${from}`) : '/home';
+
+  useEffect(() => {
+    checkBackendHealth().then((r) => setBackendOk(r.ok));
+  }, []);
+
+  function redirectAfterLogin() {
+    navigate(targetPath, { replace: true });
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -23,16 +33,17 @@ export default function Login() {
       }
       const data = await login(email, password);
       const token = data.access_token;
-      if (!token) {
-        setError('No token received');
+      if (!token || typeof token !== 'string') {
+        setError('No token received from server');
+        setLoading(false);
         return;
       }
       localStorage.setItem('access_token', token);
       if (data.refresh_token) localStorage.setItem('refresh_token', data.refresh_token);
-      navigate(from, { replace: true });
+      redirectAfterLogin();
     } catch (err) {
-      setError(err.message || err.data?.error || 'Failed');
-    } finally {
+      const msg = err.message || err.data?.error || 'Login failed';
+      setError(msg);
       setLoading(false);
     }
   }
@@ -42,13 +53,13 @@ export default function Login() {
     try {
       const data = await googleLogin(credentialResponse.credential);
       const token = data.access_token;
-      if (!token) {
-        setError('No token received');
+      if (!token || typeof token !== 'string') {
+        setError('No token received from server');
         return;
       }
       localStorage.setItem('access_token', token);
       if (data.refresh_token) localStorage.setItem('refresh_token', data.refresh_token);
-      navigate(from, { replace: true });
+      redirectAfterLogin();
     } catch (err) {
       setError(err.message || err.data?.error || 'Google sign-in failed');
     }
@@ -59,10 +70,11 @@ export default function Login() {
   }
 
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
+  const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  const showGoogleLogin = clientId && !isLocalhost;
 
   return (
     <div className="min-h-screen bg-[#EBE6DF] text-[rgb(var(--text))] flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Subtle geometric accents */}
       <div className="absolute top-0 right-0 w-64 h-64 opacity-20">
         <svg viewBox="0 0 100 100" className="w-full h-full">
           <defs>
@@ -83,6 +95,12 @@ export default function Login() {
         <div className="text-center mb-6">
           <h1 className="text-xl font-semibold text-[rgb(var(--text))]">Atlus</h1>
           <p className="text-sm text-[rgb(var(--muted))] mt-1">Your knowledge base, connected.</p>
+          {backendOk === false && (
+            <p className="text-xs text-amber-600 mt-2">Backend unreachable. Is the server running on port 5000?</p>
+          )}
+          {backendOk === true && (
+            <p className="text-xs text-green-600 mt-2">Backend connected.</p>
+          )}
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <input
@@ -102,7 +120,7 @@ export default function Login() {
             className="w-full px-3 py-2 rounded-lg bg-[#EBE6DF]/60 border border-[rgb(var(--border))] text-[rgb(var(--text))] placeholder:text-[rgb(var(--muted))] focus:outline-none focus:ring-2 focus:ring-[rgb(var(--accent))]"
           />
           {error && (
-            <p className="text-sm text-red-400">{error}</p>
+            <p className="text-sm text-red-500" role="alert">{error}</p>
           )}
           <div className="flex gap-2">
             <button
@@ -121,7 +139,7 @@ export default function Login() {
             </button>
           </div>
         </form>
-        {clientId && (
+        {showGoogleLogin && (
           <div className="mt-4 pt-4 border-t border-[rgb(var(--border))] flex justify-center">
             <GoogleLogin
               onSuccess={handleGoogleSuccess}
@@ -129,6 +147,11 @@ export default function Login() {
               useOneTap={false}
             />
           </div>
+        )}
+        {isLocalhost && (
+          <p className="mt-4 text-xs text-[rgb(var(--muted))] text-center">
+            Use email and password above. Google Sign-In is hidden on localhost to avoid origin/403 errors; it will appear when you deploy.
+          </p>
         )}
       </div>
     </div>

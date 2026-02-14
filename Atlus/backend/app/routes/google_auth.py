@@ -1,4 +1,4 @@
-from flask import Blueprint, request
+from flask import Blueprint, request, jsonify
 
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
@@ -18,11 +18,11 @@ def google():
     credential = data.get("credential") or ""
 
     if not credential:
-        return {"error": "credential required"}, 400
+        return jsonify({"error": "credential required"}), 400
 
     client_id = Config.GOOGLE_CLIENT_ID
     if not client_id:
-        return {"error": "Google auth not configured"}, 500
+        return jsonify({"error": "Google auth not configured"}), 500
 
     try:
         idinfo = id_token.verify_oauth2_token(
@@ -31,11 +31,11 @@ def google():
             client_id,
         )
     except ValueError:
-        return {"error": "invalid Google token"}, 401
+        return jsonify({"error": "invalid Google token"}), 401
 
     email = (idinfo.get("email") or "").strip().lower()
     if not email:
-        return {"error": "no email in token"}, 401
+        return jsonify({"error": "no email in token"}), 401
 
     user = User.query.filter_by(email=email).first()
     if not user:
@@ -43,6 +43,7 @@ def google():
         db.session.add(user)
         db.session.commit()
 
-    access_token = create_access_token(identity=user.id)
-    refresh_token = create_refresh_token(identity=user.id)
-    return {"access_token": access_token, "refresh_token": refresh_token}
+    # Keep JWT subject as string for broad compatibility with JWT validators.
+    access_token = create_access_token(identity=str(user.id))
+    refresh_token = create_refresh_token(identity=str(user.id))
+    return jsonify({"access_token": access_token, "refresh_token": refresh_token})

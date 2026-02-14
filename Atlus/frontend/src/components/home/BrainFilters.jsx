@@ -1,5 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import ShareBrainModal from './ShareBrainModal';
+import BrainCreateModal from './BrainCreateModal';
+import { api } from '../../api/client';
 
 // Key used to store/retrieve brains from localStorage (persists across refreshes)
 const BRAINS_STORAGE_KEY = 'atlus_brains';
@@ -11,41 +13,54 @@ const INITIAL_BRAINS = [
   { id: '3', name: 'Combined View', badge: 'Compare' },
 ];
 
-function loadBrains() {
+function loadBrainsFromStorage() {
   try {
-    // Read saved brains from localStorage (string), then parse into JS objects
     const saved = localStorage.getItem(BRAINS_STORAGE_KEY);
     return saved ? JSON.parse(saved) : INITIAL_BRAINS;
   } catch {
-    // If JSON.parse fails or localStorage is blocked, just use defaults
     return INITIAL_BRAINS;
   }
 }
 
-function saveBrains(brains) {
-  // Convert brains array into a JSON string and store it
+function saveBrainsToStorage(brains) {
   localStorage.setItem(BRAINS_STORAGE_KEY, JSON.stringify(brains));
 }
 
 export default function BrainFilters({ activeBrainId, onEnterBrain, onCollapseSidebar }) {
   // List of brain objects displayed in the UI
   // NOTE: loadBrains() runs immediately here, so this uses whatever is in localStorage
-  const [brains, setBrains] = useState(loadBrains());
+  const [brains, setBrains] = useState(loadBrainsFromStorage());
 
   // Set of selected brain IDs (used for “filtering” highlight state)
   // Using a function initializer so it runs only once on mount
   const [selected, setSelected] = useState(() => {
-    const b = loadBrains();
+    const b = loadBrainsFromStorage();
     return new Set(b.map((x) => x.id));
   });
 
   // Holds the brain object we’re currently sharing (or null if not sharing)
   const [shareBrain, setShareBrain] = useState(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
-  // Whenever "brains" changes, save the updated list to localStorage
   useEffect(() => {
-    saveBrains(brains);
+    api('/api/brain/list')
+      .then((res) => {
+        if (res.brains && res.brains.length > 0) {
+          setBrains(res.brains);
+          setSelected(new Set(res.brains.map((x) => x.id)));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    saveBrainsToStorage(brains);
   }, [brains]);
+
+  const handleBrainCreated = useCallback((brain) => {
+    setBrains((prev) => (prev.some((b) => b.id === brain.id) ? prev : [...prev, brain]));
+    setSelected((prev) => new Set([...prev, brain.id]));
+  }, []);
 
   function toggleFilter(id) {
     // Update selected set immutably:
@@ -71,22 +86,7 @@ export default function BrainFilters({ activeBrainId, onEnterBrain, onCollapseSi
   }
 
   function addBrain() {
-    // Quick unique-ish ID using current time in ms
-    // (Usually fine for small apps, but not perfect if called extremely fast)
-    const id = String(Date.now());
-
-    // Create a new brain object
-    const newBrain = {
-      id,
-      name: `New Brain ${brains.length + 1}`, // uses current "brains" length to name it
-      badge: 'Notes',
-    };
-
-    // Add it to the end of the brains list
-    setBrains((prev) => [...prev, newBrain]);
-
-    // Auto-select it by adding its id to the Set
-    setSelected((prev) => new Set([...prev, id]));
+    setShowCreateModal(true);
   }
 
   function handleShare(e, brain) {
@@ -207,9 +207,14 @@ export default function BrainFilters({ activeBrainId, onEnterBrain, onCollapseSi
         ))}
       </ul>
 
-      {/* Only render the modal when shareBrain is not null */}
       {shareBrain && (
         <ShareBrainModal brain={shareBrain} onClose={() => setShareBrain(null)} />
+      )}
+      {showCreateModal && (
+        <BrainCreateModal
+          onClose={() => setShowCreateModal(false)}
+          onCreated={handleBrainCreated}
+        />
       )}
     </div>
   );

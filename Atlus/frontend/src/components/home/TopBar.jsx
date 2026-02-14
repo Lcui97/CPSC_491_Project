@@ -1,22 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api } from '../../api/client';
+import { useMeSummary } from '../../api/brainQueries';
 
 export default function TopBar() {
   const navigate = useNavigate();
   const [accountOpen, setAccountOpen] = useState(false);
   const [quickOpen, setQuickOpen] = useState(false);
-  const [welcomeMessage, setWelcomeMessage] = useState('');
-  const [loading, setLoading] = useState(true);
   const accountRef = useRef(null);
   const quickRef = useRef(null);
 
-  useEffect(() => {
-    api('/home')
-      .then((data) => setWelcomeMessage(data.message || ''))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
+  const { data: summary, isLoading: summaryLoading } = useMeSummary();
 
   useEffect(() => {
     function handleClickOutside(e) {
@@ -101,15 +94,21 @@ export default function TopBar() {
             </svg>
           </button>
           {accountOpen && (
-            <div className="absolute right-0 top-full mt-1 py-3 px-4 min-w-[200px] bg-[rgb(var(--panel))] border border-[rgb(var(--border))] rounded-lg shadow-lg z-50">
-              <p className="text-xs font-medium text-[rgb(var(--muted))] mb-1">Account</p>
-              {loading ? (
+            <div className="absolute right-0 top-full mt-1 py-3 px-4 min-w-[220px] bg-[rgb(var(--panel))] border border-[rgb(var(--border))] rounded-lg shadow-lg z-50">
+              <p className="text-xs font-medium text-[rgb(var(--muted))] mb-2">Account</p>
+              {summaryLoading ? (
                 <p className="text-sm text-[rgb(var(--muted))]">Loading…</p>
               ) : (
-                <p className="text-sm text-[rgb(var(--text))] mb-2">{welcomeMessage || '—'}</p>
+                <>
+                  <p className="text-sm text-[rgb(var(--text))] mb-1 break-all">{summary?.email ?? '—'}</p>
+                  <p className="text-xs text-[rgb(var(--muted))] mb-1">
+                    Notes: <span className="text-[rgb(var(--text))] font-medium">{summary?.total_notes ?? 0}</span>
+                  </p>
+                  <p className="text-xs text-[rgb(var(--muted))]">
+                    Brains: <span className="text-[rgb(var(--text))] font-medium">{summary?.brains_count ?? 0}</span>
+                  </p>
+                </>
               )}
-              <p className="text-xs text-[rgb(var(--muted))]">Plan: Local MVP</p>
-              <p className="text-xs text-[rgb(var(--muted))]">Status: Connected</p>
             </div>
           )}
         </div>

@@ -45,7 +45,7 @@ export default function Landing() {
           </div>
         </header>
 
-        {/* Hero - left-aligned for geometric balance */}
+        {/* left-aligned */}
         <main className="flex-1 flex flex-col items-start justify-center px-6 sm:px-12 lg:px-20 py-16 max-w-2xl">
           <h1 className="text-4xl sm:text-5xl font-bold text-[rgb(var(--text))] leading-tight">
             The future of knowledge happens together
