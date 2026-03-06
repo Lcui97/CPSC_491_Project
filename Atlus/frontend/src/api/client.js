@@ -23,7 +23,13 @@ export async function api(path, options = {}) {
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const res = await fetch(`${API_URL}${path}`, { ...options, headers });
+  let res;
+  try {
+    res = await fetch(`${API_URL}${path}`, { ...options, headers });
+  } catch (err) {
+    const base = (typeof API_URL === 'string' && API_URL) ? API_URL : window.location.origin;
+    throw new Error(`Cannot reach server at ${base}. Is the backend running? (e.g. \`python run.py\` in Atlus/backend)`);
+  }
   const data = await res.json().catch(() => ({}));
 
   if (res.status === 401) {

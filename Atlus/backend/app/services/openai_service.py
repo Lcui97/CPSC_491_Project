@@ -123,3 +123,45 @@ Output only the Markdown, no explanation."""
         temperature=0.2,
     )
     return response.choices[0].message.content.strip()
+
+
+# Prompt templates for Notebook-style "ask brain" modes
+SUMMARY_SYSTEM = """You are a study assistant. Given notes and documents from the user's knowledge base, produce a clear, concise summary. Use bullet points or short paragraphs. Focus on main ideas and key facts. Output only the summary, no preamble."""
+
+STUDY_GUIDE_SYSTEM = """You are a study assistant. Given notes and documents, create a study guide: key concepts, definitions, and main takeaways. Use headings and bullet points. Output only the study guide."""
+
+KEY_POINTS_SYSTEM = """You are a study assistant. Given notes and documents, list the key points or main takeaways in a concise bullet list. Output only the list."""
+
+
+def ask_brain(context_text: str, user_prompt: str, mode: str = "custom") -> str:
+    """
+    Send context (concatenated node/source content) and user prompt to OpenAI.
+    mode: "summary" | "study_guide" | "key_points" | "custom"
+    Returns the assistant reply. Raises if OpenAI not configured or on API error.
+    """
+    if not _has_openai():
+        return "OpenAI is not configured. Add OPENAI_API_KEY to your environment to use summaries and study guides."
+
+    system_map = {
+        "summary": SUMMARY_SYSTEM,
+        "study_guide": STUDY_GUIDE_SYSTEM,
+        "key_points": KEY_POINTS_SYSTEM,
+    }
+    system = system_map.get(mode)
+    if not system:
+        system = "You are a study assistant. Answer based on the following notes and documents. Be concise and accurate. Output only the response."
+
+    # Cap context to avoid token limits (roughly 8k chars for gpt-4o-mini)
+    context = (context_text or "").strip()[:24000]
+
+    client = _get_client()
+    user_content = f"Notes and documents:\n\n{context}\n\n---\n\nUser request: {user_prompt.strip() or 'Summarize the above.'}"
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user_content},
+        ],
+        temperature=0.3,
+    )
+    return response.choices[0].message.content.strip()

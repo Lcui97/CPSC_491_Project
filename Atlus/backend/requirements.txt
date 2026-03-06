@@ -10,6 +10,8 @@ requests
 PyPDF2
 openai
 pinecone
+python-docx
+python-pptx
 # OCR for handwritten notes (optional: install tesseract for pytesseract, or use easyocr)
 easyocr
 pillow

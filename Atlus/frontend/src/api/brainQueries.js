@@ -8,6 +8,7 @@ export const brainKeys = {
   graph: (brainId) => ['brains', brainId, 'graph'],
   globalGraph: () => ['graph', 'global'],
   meSummary: () => ['me', 'summary'],
+  sources: (brainId) => ['brains', brainId, 'sources'],
 };
 
 export function useBrains() {
@@ -81,6 +82,25 @@ export function useCreateNode(brainId) {
       queryClient.invalidateQueries({ queryKey: ['brains', brainId] });
       queryClient.invalidateQueries({ queryKey: brainKeys.globalGraph() });
       queryClient.invalidateQueries({ queryKey: brainKeys.meSummary() });
+    },
+  });
+}
+
+export function useBrainSources(brainId) {
+  return useQuery({
+    queryKey: brainKeys.sources(brainId),
+    queryFn: () => api(`/api/brain/${brainId}/sources`).then((r) => r.sources || []),
+    enabled: !!brainId,
+  });
+}
+
+export function useBrainAsk(brainId) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body) => api(`/api/brain/${brainId}/ask`, { method: 'POST', body: JSON.stringify(body) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: brainKeys.sources(brainId) });
+      queryClient.invalidateQueries({ queryKey: brainKeys.nodes(brainId, {}) });
     },
   });
 }

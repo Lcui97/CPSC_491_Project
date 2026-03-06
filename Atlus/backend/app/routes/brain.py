@@ -7,8 +7,9 @@ Brain API: create, ingest documents, OCR, generate nodes.
 """
 import os
 import uuid
+import threading
 from datetime import datetime, timezone
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from app.extensions import db
@@ -69,14 +70,48 @@ def create_brain():
     except Exception:
         pass
 
-    # Optional: if files were provided at creation time, run ingestion pipeline
+    # If files were provided, run ingestion in background so the request returns immediately.
+    # Read file data now (before response); request stream is invalid after we return.
     if files:
-        try:
-            from app.services.ingestion_pipeline import process_creation_files
-            process_creation_files(brain_id, user.id, files)
-        except Exception as e:
-            # Still return 201; ingestion can be retried via /brain/ingest
-            pass
+        import io
+        file_payloads = []
+        for f in files:
+            if not f or not getattr(f, "filename", None):
+                continue
+            try:
+                data = f.read()
+                if not data:
+                    continue
+                # Wrapper so ingestion_pipeline can use .filename and .stream
+                obj = type("FileLike", (), {"filename": f.filename, "stream": io.BytesIO(data)})()
+                obj.read = lambda d=data: d  # bound copy per file
+                file_payloads.append(obj)
+            except Exception:
+                continue
+        if file_payloads:
+            brain_id_copy = brain_id
+            user_id_copy = user.id
+            uri = (current_app.config.get("SQLALCHEMY_DATABASE_URI") or "").lower()
+            if "sqlite" in uri:
+                # SQLite uses file-level locking; a background thread can cause "database is locked"
+                # Run ingestion in foreground so only one writer at a time.
+                try:
+                    from app.services.ingestion_pipeline import process_creation_files
+                    process_creation_files(brain_id_copy, user_id_copy, file_payloads)
+                except Exception:
+                    db.session.rollback()
+            else:
+                app = current_app._get_current_object()
+
+                def ingest_in_background():
+                    with app.app_context():
+                        try:
+                            from app.services.ingestion_pipeline import process_creation_files
+                            process_creation_files(brain_id_copy, user_id_copy, file_payloads)
+                        except Exception:
+                            pass
+
+                threading.Thread(target=ingest_in_background, daemon=True).start()
 
     return jsonify({
         "brain": {
@@ -91,7 +126,7 @@ def create_brain():
 # ---------------------------------------------------------------------------
 # POST /brain/ingest
 # Multipart: brain_id (form), files[] (PDF, .txt, .md)
-# Textbook pipeline: extract → chunk → generate nodes → Pinecone + DB
+# Returns immediately; runs extraction + OpenAI + Pinecone in background (can take minutes for large PDFs)
 # ---------------------------------------------------------------------------
 @bp.route("/brain/ingest", methods=["POST"])
 @jwt_required()
@@ -112,12 +147,44 @@ def ingest():
     if not files:
         return jsonify({"error": "at least one file required"}), 400
 
-    try:
-        from app.services.ingestion_pipeline import ingest_documents
-        result = ingest_documents(brain_id, user.id, files)
-        return jsonify(result), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    # Read file data before response (request stream invalid after return)
+    import io
+    file_payloads = []
+    for f in files:
+        if not f or not getattr(f, "filename", None):
+            continue
+        try:
+            data = f.read()
+            if not data:
+                continue
+            obj = type("FileLike", (), {"filename": f.filename, "stream": io.BytesIO(data)})()
+            obj.read = lambda d=data: d
+            file_payloads.append(obj)
+        except Exception:
+            continue
+
+    if not file_payloads:
+        return jsonify({"error": "no valid files to process"}), 400
+
+    brain_id_copy = brain_id
+    user_id_copy = user.id
+    app = current_app._get_current_object()
+
+    def ingest_in_background():
+        with app.app_context():
+            try:
+                from app.services.ingestion_pipeline import ingest_documents
+                ingest_documents(brain_id_copy, user_id_copy, file_payloads)
+            except Exception:
+                db.session.rollback()
+
+    threading.Thread(target=ingest_in_background, daemon=True).start()
+
+    return jsonify({
+        "message": "Processing started. Your document will appear in Sources when ready (may take a few minutes for large PDFs).",
+        "processing": True,
+        "files_count": len(file_payloads),
+    }), 200
 
 
 # ---------------------------------------------------------------------------
@@ -218,6 +285,72 @@ def list_brains():
             for b in brains
         ]
     }), 200
+
+
+# ---------------------------------------------------------------------------
+# GET /brain/<brain_id>/sources — list source files (uploaded docs) for a brain
+# ---------------------------------------------------------------------------
+@bp.route("/brain/<brain_id>/sources", methods=["GET"])
+@jwt_required()
+def get_brain_sources(brain_id):
+    user = _get_user_or_404()
+    if not user:
+        return jsonify({"error": "user not found"}), 404
+    brain = _brain_for_user(brain_id, user.id)
+    if not brain:
+        return jsonify({"error": "brain not found"}), 404
+    sources = SourceFile.query.filter_by(brain_id=brain_id).order_by(SourceFile.created_at.desc()).all()
+    return jsonify({
+        "sources": [
+            {
+                "id": s.id,
+                "filename": s.filename,
+                "file_type": s.file_type,
+                "created_at": s.created_at.isoformat() if s.created_at else None,
+            }
+            for s in sources
+        ]
+    }), 200
+
+
+# ---------------------------------------------------------------------------
+# POST /brain/<brain_id>/ask — prompt LLM with brain context (summarize, study guide, etc.)
+# Body: { "prompt": "...", "mode": "summary" | "study_guide" | "key_points" | "custom" }
+# ---------------------------------------------------------------------------
+@bp.route("/brain/<brain_id>/ask", methods=["POST"])
+@jwt_required()
+def ask_brain_route(brain_id):
+    user = _get_user_or_404()
+    if not user:
+        return jsonify({"error": "user not found"}), 404
+    brain = _brain_for_user(brain_id, user.id)
+    if not brain:
+        return jsonify({"error": "brain not found"}), 404
+
+    data = request.get_json() or {}
+    prompt = (data.get("prompt") or "").strip()
+    mode = (data.get("mode") or "summary").strip().lower()
+    if mode not in ("summary", "study_guide", "key_points", "custom"):
+        mode = "custom"
+
+    nodes = Node.query.filter_by(brain_id=brain_id).order_by(Node.updated_at.desc().nullslast(), Node.created_at.desc()).limit(100).all()
+    context_parts = []
+    for n in nodes:
+        content = n.markdown_content or n.raw_content or ""
+        if content.strip():
+            title = (n.title or "Untitled").strip()
+            context_parts.append(f"## {title}\n\n{content[:8000]}")
+    context_text = "\n\n---\n\n".join(context_parts) if context_parts else ""
+
+    if not context_text.strip():
+        return jsonify({"response": "Add some notes or upload documents to this brain first, then ask for a summary or study guide."}), 200
+
+    try:
+        from app.services.openai_service import ask_brain as llm_ask_brain
+        response_text = llm_ask_brain(context_text, prompt or "Summarize the above.", mode)
+        return jsonify({"response": response_text}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 # ---------------------------------------------------------------------------

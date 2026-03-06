@@ -82,6 +82,15 @@ def create_app(config_class=Config):
         try:
             db.create_all()
             _apply_sqlite_compat_migrations(app)
+            uri = app.config.get("SQLALCHEMY_DATABASE_URI", "")
+            if "sqlite" in str(uri).lower():
+                from sqlalchemy import event
+                @event.listens_for(db.engine, "connect")
+                def _set_sqlite_pragma(dbapi_conn, connection_record):
+                    cursor = dbapi_conn.cursor()
+                    cursor.execute("PRAGMA journal_mode=WAL")
+                    cursor.execute("PRAGMA busy_timeout=30000")
+                    cursor.close()
         except Exception as e:
             if "already exists" not in str(e).lower():
                 raise

@@ -10,19 +10,27 @@ from typing import List
 from app.extensions import db
 from app.models.brain import Brain, SourceFile
 from app.services.pdf_extractor import extract_text_from_pdf
+from app.services.docx_extractor import extract_text_from_docx
+from app.services.pptx_extractor import extract_text_from_pptx
 from app.services.chunker import chunk_by_sections
 from app.services.node_generation import generate_and_store_nodes
 
 
-ALLOWED_EXTENSIONS = {"pdf", "txt", "md", "markdown", "jpg", "jpeg", "png"}
+ALLOWED_EXTENSIONS = {"pdf", "txt", "md", "markdown", "docx", "pptx", "jpg", "jpeg", "png"}
 PDF_EXT = {"pdf"}
 TEXT_EXT = {"txt", "md", "markdown"}
+DOCX_EXT = {"docx"}
+PPTX_EXT = {"pptx"}
 IMAGE_EXT = {"jpg", "jpeg", "png"}
 
 
 def _file_type(extension: str) -> str:
     if extension in PDF_EXT:
         return "pdf"
+    if extension in DOCX_EXT:
+        return "docx"
+    if extension in PPTX_EXT:
+        return "pptx"
     if extension in IMAGE_EXT:
         return "image"
     if extension in TEXT_EXT:
@@ -55,6 +63,10 @@ def ingest_documents(brain_id: str, user_id: int, files: List) -> dict:
     - PDF/text/md: extract or read → chunk → generate nodes
     - Image: skip here; client should use /brain/ocr then /brain/generate-nodes with markdown
     """
+    try:
+        db.session.rollback()
+    except Exception:
+        pass
     total_nodes = 0
     total_links = 0
     errors = []
@@ -77,6 +89,10 @@ def ingest_documents(brain_id: str, user_id: int, files: List) -> dict:
             source_file = _ensure_source_file(brain_id, file.filename, ft)
             if ft == "pdf":
                 text = extract_text_from_pdf(file.stream)
+            elif ft == "docx":
+                text = extract_text_from_docx(file.stream)
+            elif ft == "pptx":
+                text = extract_text_from_pptx(file.stream)
             else:
                 text = file.read().decode("utf-8", errors="replace")
 

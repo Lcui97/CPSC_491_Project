@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import TopBar from '../components/home/TopBar';
 import { api, apiUpload } from '../api/client';
 
-const ALLOWED_EXT = ['.pdf', '.txt', '.md', '.markdown'];
+const ALLOWED_EXT = ['.pdf', '.docx', '.pptx', '.txt', '.md', '.markdown'];
 
 function isDocument(file) {
   const ext = '.' + (file.name?.split('.').pop() || '').toLowerCase();
@@ -60,7 +60,7 @@ export default function DocumentIngestion() {
     }
     const files = selectedFiles.filter(isDocument);
     if (files.length === 0) {
-      setMessage({ error: 'Add at least one PDF, TXT, or Markdown file.' });
+      setMessage({ error: 'Add at least one PDF, DOCX, PPTX, TXT, or Markdown file.' });
       return;
     }
     setIngesting(true);
@@ -115,7 +115,7 @@ export default function DocumentIngestion() {
             <input
               type="file"
               multiple
-              accept=".pdf,.txt,.md,.markdown"
+              accept=".pdf,.docx,.pptx,.txt,.md,.markdown"
               onChange={handleFileSelect}
               className="hidden"
               id="file-input"
@@ -188,7 +188,7 @@ export default function DocumentIngestion() {
           )}
 
           <p className="text-sm text-[rgb(var(--muted))]">
-            Supported formats: PDF, TXT, Markdown. Select a brain above, add files, then click Ingest.
+            Supported formats: PDF, DOCX, PPTX, TXT, Markdown. Select a brain above, add files, then click Ingest.
           </p>
         </div>
       </main>

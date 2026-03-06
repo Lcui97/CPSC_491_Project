@@ -4,6 +4,7 @@ import { useNode, useUpdateNode } from '../api/brainQueries';
 import NoteSidebar from '../components/note/NoteSidebar';
 import MarkdownEditor from '../components/note/MarkdownEditor';
 import ContextPanel from '../components/note/ContextPanel';
+import BrainLanding from '../components/note/BrainLanding';
 import TopBar from '../components/home/TopBar';
 import BrainExplorerHeader from '../components/note/BrainExplorerHeader';
 
@@ -73,7 +74,14 @@ export default function NoteView() {
   return (
     <div className="min-h-screen bg-[rgb(var(--bg))] text-[rgb(var(--text))] flex flex-col">
       <TopBar />
-      <BrainExplorerHeader title={displayNode?.title || (nodeId ? 'Note' : null)} right={<button type="button" onClick={() => navigate(`/brain/${brainId}/graph`)} className="text-sm text-[rgb(var(--muted))] hover:text-[rgb(var(--accent))]">Graph</button>} />
+      <BrainExplorerHeader
+        title={displayNode?.title || (nodeId ? 'Note' : null)}
+        right={
+          <button type="button" onClick={() => navigate(`/brain/${brainId}/graph`)} className="text-sm text-[rgb(var(--muted))] hover:text-[rgb(var(--accent))]">
+            Graph
+          </button>
+        }
+      />
       <div className="flex-1 flex overflow-hidden">
         <NoteSidebar onSelectNode={() => {}} />
         <main className="flex-1 flex flex-col overflow-hidden min-w-0">
@@ -99,9 +107,7 @@ export default function NoteView() {
               </div>
             </>
           ) : (
-            <div className="flex-1 flex items-center justify-center text-[rgb(var(--muted))]">
-              Select a note from the sidebar or add a new note.
-            </div>
+            <BrainLanding />
           )}
         </main>
         <ContextPanel nodeId={nodeId} />
