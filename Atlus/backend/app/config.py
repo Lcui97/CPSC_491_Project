@@ -1,7 +1,12 @@
 import os
+from pathlib import Path
+
 from dotenv import load_dotenv
 
-load_dotenv()
+# Always load backend/.env (not cwd), and override machine env vars so local .env wins.
+# Stale OPENAI_API_KEY in Windows "User environment variables" is a common cause of 401s.
+_backend_root = Path(__file__).resolve().parent.parent
+load_dotenv(_backend_root / ".env", override=True)
 
 
 class Config:
@@ -13,3 +18,5 @@ class Config:
     SQLALCHEMY_DATABASE_URI = os.environ.get("SQLALCHEMY_DATABASE_URI", "sqlite:///app.db")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
+    # Handwritten scans: saved under backend/<UPLOAD_FOLDER>/<brain_id>/
+    UPLOAD_FOLDER = os.environ.get("ATLUS_UPLOAD_FOLDER", "uploads")

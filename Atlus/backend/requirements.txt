@@ -12,6 +12,7 @@ openai
 pinecone
 python-docx
 python-pptx
-# OCR for handwritten notes (optional: install tesseract for pytesseract, or use easyocr)
+# Handwriting: primary OCR is OpenAI vision (gpt-4o) when OPENAI_API_KEY is set.
+# easyocr is optional fallback if vision fails or no API key.
 easyocr
 pillow

@@ -8,12 +8,24 @@ Brain API: create, ingest documents, OCR, generate nodes.
 import os
 import uuid
 import threading
+from collections import defaultdict
 from datetime import datetime, timezone
-from flask import Blueprint, request, jsonify, current_app
+from io import BytesIO
+from pathlib import Path
+
+from flask import Blueprint, request, jsonify, current_app, send_file
 from flask_jwt_extended import get_jwt_identity, jwt_required
+from werkzeug.datastructures import FileStorage
 
 from app.extensions import db
-from app.models.brain import Brain, Node, NodeRelationship, SourceFile
+from app.models.brain import (
+    Brain,
+    BrainCollaborator,
+    BrainShareLink,
+    Node,
+    NodeRelationship,
+    SourceFile,
+)
 from app.models.user import User
 
 bp = Blueprint("brain", __name__)
@@ -32,8 +44,19 @@ def _get_user_or_404():
 
 
 def _brain_for_user(brain_id, user_id):
-    brain = Brain.query.filter_by(id=brain_id, user_id=user_id).first()
-    return brain
+    """Brain the user owns or has joined via a share link."""
+    brain = Brain.query.filter_by(id=brain_id).first()
+    if not brain:
+        return None
+    if brain.user_id == user_id:
+        return brain
+    if BrainCollaborator.query.filter_by(brain_id=brain_id, user_id=user_id).first():
+        return brain
+    return None
+
+
+def _upload_root():
+    return Path(current_app.root_path).parent / current_app.config.get("UPLOAD_FOLDER", "uploads")
 
 
 # ---------------------------------------------------------------------------
@@ -213,11 +236,67 @@ def ocr():
         return jsonify({"error": "file required"}), 400
 
     try:
+        data = file.read()
+        if not data:
+            return jsonify({"error": "empty file"}), 400
+
+        ext = os.path.splitext((file.filename or "").lower())[-1]
+        allowed_img = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
+        is_pdf = ext == ".pdf"
+        source_file_id = None
+
+        if not is_pdf and ext in allowed_img:
+            upload_root = _upload_root()
+            brain_dir = upload_root / brain_id
+            brain_dir.mkdir(parents=True, exist_ok=True)
+            uid = str(uuid.uuid4())
+            fname = f"{uid}{ext}"
+            full_path = brain_dir / fname
+            full_path.write_bytes(data)
+            rel = f"{brain_id}/{fname}"
+            sf = SourceFile(
+                brain_id=brain_id,
+                filename=file.filename or "scan.png",
+                file_type="image",
+                storage_path=rel,
+            )
+            db.session.add(sf)
+            db.session.commit()
+            source_file_id = sf.id
+
+        bio = BytesIO(data)
+        bio.seek(0)
+        fs = FileStorage(stream=bio, filename=file.filename or "upload.png")
         from app.services.ocr_service import run_ocr_to_markdown
-        result = run_ocr_to_markdown(file)
+
+        result = run_ocr_to_markdown(fs)
+        result["source_file_id"] = source_file_id
+        if source_file_id:
+            result["preview_path"] = f"/api/brain/{brain_id}/sources/{source_file_id}/file"
         return jsonify(result), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+# ---------------------------------------------------------------------------
+# GET /brain/<brain_id>/sources/<source_id>/file — serve uploaded scan (auth)
+# ---------------------------------------------------------------------------
+@bp.route("/brain/<brain_id>/sources/<int:source_id>/file", methods=["GET"])
+@jwt_required()
+def serve_source_file(brain_id, source_id):
+    user = _get_user_or_404()
+    if not user:
+        return jsonify({"error": "user not found"}), 404
+    brain = _brain_for_user(brain_id, user.id)
+    if not brain:
+        return jsonify({"error": "brain not found"}), 404
+    src = SourceFile.query.filter_by(id=source_id, brain_id=brain_id).first()
+    if not src or not src.storage_path:
+        return jsonify({"error": "file not found"}), 404
+    path = _upload_root() / src.storage_path
+    if not path.is_file():
+        return jsonify({"error": "file missing on disk"}), 404
+    return send_file(path, as_attachment=False, download_name=src.filename or "scan.png")
 
 
 # ---------------------------------------------------------------------------
@@ -245,6 +324,7 @@ def generate_nodes():
     chunks = data.get("chunks")
     markdown = data.get("markdown")
     source_file_id = data.get("source_file_id")
+    node_type = (data.get("node_type") or "").strip() or None
 
     if not chunks and not markdown:
         return jsonify({"error": "chunks or markdown required"}), 400
@@ -257,6 +337,7 @@ def generate_nodes():
             chunks=chunks,
             markdown=markdown,
             source_file_id=source_file_id,
+            node_type=node_type,
         )
         return jsonify(result), 200
     except Exception as e:
@@ -273,7 +354,31 @@ def list_brains():
     if not user:
         return jsonify({"error": "user not found"}), 404
 
-    brains = Brain.query.filter_by(user_id=user.id).order_by(Brain.created_at.desc()).all()
+    owned = Brain.query.filter_by(user_id=user.id).order_by(Brain.created_at.desc()).all()
+    collab_ids = [
+        r[0]
+        for r in db.session.query(BrainCollaborator.brain_id)
+        .filter(BrainCollaborator.user_id == user.id)
+        .all()
+    ]
+    collab_brains = []
+    if collab_ids:
+        collab_brains = (
+            Brain.query.filter(Brain.id.in_(collab_ids))
+            .order_by(Brain.created_at.desc())
+            .all()
+        )
+    seen = set()
+    merged = []
+    for b in owned:
+        if b.id not in seen:
+            seen.add(b.id)
+            merged.append(b)
+    for b in collab_brains:
+        if b.id not in seen:
+            seen.add(b.id)
+            merged.append(b)
+
     return jsonify({
         "brains": [
             {
@@ -281,10 +386,158 @@ def list_brains():
                 "name": b.name,
                 "badge": b.badge,
                 "created_at": b.created_at.isoformat() if b.created_at else None,
+                "is_owner": b.user_id == user.id,
             }
-            for b in brains
+            for b in merged
         ]
     }), 200
+
+
+# ---------------------------------------------------------------------------
+# POST /brain/<brain_id>/leave — collaborator removes self (owner cannot "leave")
+# ---------------------------------------------------------------------------
+@bp.route("/brain/<brain_id>/leave", methods=["POST"])
+@jwt_required()
+def leave_brain(brain_id):
+    user = _get_user_or_404()
+    if not user:
+        return jsonify({"error": "user not found"}), 404
+    brain = Brain.query.filter_by(id=brain_id).first()
+    if not brain:
+        return jsonify({"error": "brain not found"}), 404
+    if brain.user_id == user.id:
+        return jsonify({"error": "owners should delete the brain instead of leaving"}), 400
+    row = BrainCollaborator.query.filter_by(brain_id=brain_id, user_id=user.id).first()
+    if not row:
+        return jsonify({"error": "not a collaborator on this brain"}), 404
+    db.session.delete(row)
+    db.session.commit()
+    return jsonify({"ok": True}), 200
+
+
+# ---------------------------------------------------------------------------
+# DELETE /brain/<brain_id> — owner only; removes nodes, sources, uploads, Pinecone namespace
+# ---------------------------------------------------------------------------
+@bp.route("/brain/<brain_id>", methods=["DELETE"])
+@jwt_required()
+def delete_brain(brain_id):
+    user = _get_user_or_404()
+    if not user:
+        return jsonify({"error": "user not found"}), 404
+    brain = Brain.query.filter_by(id=brain_id).first()
+    if not brain:
+        return jsonify({"error": "brain not found"}), 404
+    if brain.user_id != user.id:
+        return jsonify({"error": "only the brain owner can delete it"}), 403
+
+    from sqlalchemy import or_
+
+    node_ids = [n.id for n in Node.query.filter_by(brain_id=brain_id).all()]
+    if node_ids:
+        NodeRelationship.query.filter(
+            or_(
+                NodeRelationship.source_node_id.in_(node_ids),
+                NodeRelationship.target_node_id.in_(node_ids),
+            )
+        ).delete(synchronize_session=False)
+    Node.query.filter_by(brain_id=brain_id).delete(synchronize_session=False)
+
+    upload_root = _upload_root()
+    for sf in SourceFile.query.filter_by(brain_id=brain_id).all():
+        if sf.storage_path:
+            fp = upload_root / sf.storage_path
+            if fp.is_file():
+                try:
+                    fp.unlink()
+                except OSError:
+                    pass
+    SourceFile.query.filter_by(brain_id=brain_id).delete(synchronize_session=False)
+
+    brain_dir = upload_root / brain_id
+    if brain_dir.is_dir():
+        import shutil
+
+        try:
+            shutil.rmtree(brain_dir, ignore_errors=True)
+        except Exception:
+            pass
+
+    BrainShareLink.query.filter_by(brain_id=brain_id).delete(synchronize_session=False)
+    BrainCollaborator.query.filter_by(brain_id=brain_id).delete(synchronize_session=False)
+
+    try:
+        from app.services.pinecone_service import delete_brain_namespace
+
+        delete_brain_namespace(brain_id)
+    except Exception:
+        pass
+
+    db.session.delete(brain)
+    db.session.commit()
+    return jsonify({"ok": True, "id": brain_id}), 200
+
+
+# ---------------------------------------------------------------------------
+# POST /brain/<brain_id>/share-link — owner creates invite token
+# ---------------------------------------------------------------------------
+@bp.route("/brain/<brain_id>/share-link", methods=["POST"])
+@jwt_required()
+def create_brain_share_link(brain_id):
+    user = _get_user_or_404()
+    if not user:
+        return jsonify({"error": "user not found"}), 404
+    brain = Brain.query.filter_by(id=brain_id, user_id=user.id).first()
+    if not brain:
+        return jsonify({"error": "brain not found"}), 404
+    token = str(uuid.uuid4())
+    link = BrainShareLink(token=token, brain_id=brain_id, created_by_user_id=user.id)
+    db.session.add(link)
+    db.session.commit()
+    return jsonify({"token": token, "share_path": f"/shared/{token}"}), 201
+
+
+# ---------------------------------------------------------------------------
+# GET /share/brain/<token> — public metadata for landing page (no auth)
+# ---------------------------------------------------------------------------
+@bp.route("/share/brain/<token>", methods=["GET"])
+def public_share_brain_info(token):
+    link = BrainShareLink.query.filter_by(token=token).first()
+    if not link:
+        return jsonify({"error": "not found"}), 404
+    brain = Brain.query.get(link.brain_id)
+    if not brain:
+        return jsonify({"error": "not found"}), 404
+    return jsonify({
+        "brain": {
+            "id": brain.id,
+            "name": brain.name,
+            "badge": brain.badge,
+        }
+    }), 200
+
+
+# ---------------------------------------------------------------------------
+# POST /share/brain/<token>/join — logged-in user joins as collaborator
+# ---------------------------------------------------------------------------
+@bp.route("/share/brain/<token>/join", methods=["POST"])
+@jwt_required()
+def join_shared_brain(token):
+    user = _get_user_or_404()
+    if not user:
+        return jsonify({"error": "user not found"}), 404
+    link = BrainShareLink.query.filter_by(token=token).first()
+    if not link:
+        return jsonify({"error": "not found"}), 404
+    brain = Brain.query.get(link.brain_id)
+    if not brain:
+        return jsonify({"error": "not found"}), 404
+    if brain.user_id == user.id:
+        return jsonify({"ok": True, "brain_id": brain.id, "role": "owner"}), 200
+    if BrainCollaborator.query.filter_by(brain_id=brain.id, user_id=user.id).first():
+        return jsonify({"ok": True, "brain_id": brain.id, "role": "collaborator"}), 200
+    db.session.add(BrainCollaborator(brain_id=brain.id, user_id=user.id))
+    db.session.commit()
+    return jsonify({"ok": True, "brain_id": brain.id, "role": "collaborator"}), 200
 
 
 # ---------------------------------------------------------------------------
@@ -307,10 +560,35 @@ def get_brain_sources(brain_id):
                 "filename": s.filename,
                 "file_type": s.file_type,
                 "created_at": s.created_at.isoformat() if s.created_at else None,
+                "has_file": bool(s.storage_path),
             }
             for s in sources
         ]
     }), 200
+
+
+# ---------------------------------------------------------------------------
+# DELETE /brain/<brain_id>/sources/<source_id> — remove source record; detach nodes (keeps notes)
+# ---------------------------------------------------------------------------
+@bp.route("/brain/<brain_id>/sources/<int:source_id>", methods=["DELETE"])
+@jwt_required()
+def delete_brain_source(brain_id, source_id):
+    user = _get_user_or_404()
+    if not user:
+        return jsonify({"error": "user not found"}), 404
+    brain = _brain_for_user(brain_id, user.id)
+    if not brain:
+        return jsonify({"error": "brain not found"}), 404
+    src = SourceFile.query.filter_by(id=source_id, brain_id=brain_id).first()
+    if not src:
+        return jsonify({"error": "source not found"}), 404
+    Node.query.filter(Node.brain_id == brain_id, Node.source_file_id == source_id).update(
+        {Node.source_file_id: None},
+        synchronize_session=False,
+    )
+    db.session.delete(src)
+    db.session.commit()
+    return jsonify({"ok": True}), 200
 
 
 # ---------------------------------------------------------------------------
@@ -471,7 +749,7 @@ def create_node(brain_id):
     title = (data.get("title") or "Untitled").strip()[:512] or "Untitled"
     markdown_content = data.get("markdown_content")
     if markdown_content is None:
-        markdown_content = "# Untitled\n\nStart writing here. Use the sidebar to open other notes and the **Graph** to see connections."
+        markdown_content = "# Untitled\n\nStart writing here. Handwritten scans open with the image on the left and Markdown on the right."
     tags = data.get("tags")
     if not isinstance(tags, list):
         tags = []
@@ -496,6 +774,7 @@ def _node_to_json(n):
     return {
         "id": n.id,
         "brain_id": n.brain_id,
+        "source_file_id": getattr(n, "source_file_id", None),
         "title": n.title,
         "markdown_content": content or "",
         "tags": n.tags if n.tags is not None else (n.concepts or []),
@@ -555,7 +834,52 @@ def update_node(node_id):
     except Exception:
         pass
     db.session.commit()
+    try:
+        from app.services.node_generation import relink_user_note
+
+        relink_user_note(node_id, node.brain_id)
+    except Exception:
+        pass
+    db.session.refresh(node)
     return jsonify(_node_to_json(node)), 200
+
+
+# ---------------------------------------------------------------------------
+# DELETE /nodes/<node_id> — delete note and clean up edges / vectors
+# ---------------------------------------------------------------------------
+@bp.route("/nodes/<node_id>", methods=["DELETE"])
+@jwt_required()
+def delete_node(node_id):
+    user = _get_user_or_404()
+    if not user:
+        return jsonify({"error": "user not found"}), 404
+    node = _node_for_user(node_id, user.id)
+    if not node:
+        return jsonify({"error": "node not found"}), 404
+
+    brain_id = node.brain_id
+
+    NodeRelationship.query.filter(
+        (NodeRelationship.source_node_id == node_id) | (NodeRelationship.target_node_id == node_id)
+    ).delete(synchronize_session=False)
+
+    others = Node.query.filter_by(brain_id=brain_id).all()
+    for n in others:
+        rel = n.related_node_ids or []
+        if node_id in rel:
+            n.related_node_ids = [x for x in rel if x != node_id]
+
+    try:
+        from app.services.pinecone_service import delete_vectors
+
+        vid = node.embedding_id or node.id
+        delete_vectors(brain_id, [str(vid)])
+    except Exception:
+        pass
+
+    db.session.delete(node)
+    db.session.commit()
+    return jsonify({"ok": True, "id": node_id, "brain_id": brain_id}), 200
 
 
 # ---------------------------------------------------------------------------
@@ -609,7 +933,13 @@ def get_related(node_id):
     if neighbor_ids:
         neighbors = Node.query.filter(Node.id.in_(list(neighbor_ids))).all()
         for n in neighbors:
-            related.append({"id": n.id, "title": n.title, "tags": n.tags or []})
+            related.append({
+                "id": n.id,
+                "title": n.title,
+                "tags": n.tags or [],
+                "similarity": 0.86,
+                "source": "graph",
+            })
 
     related_node_ids = set(node.related_node_ids or [])
     related_node_ids.discard(node_id)
@@ -618,7 +948,13 @@ def get_related(node_id):
             continue
         n = Node.query.get(nid)
         if n:
-            related.append({"id": n.id, "title": n.title, "tags": n.tags or []})
+            related.append({
+                "id": n.id,
+                "title": n.title,
+                "tags": n.tags or [],
+                "similarity": 0.78,
+                "source": "similarity",
+            })
 
     try:
         from app.services.pinecone_service import similarity_search
@@ -629,7 +965,14 @@ def get_related(node_id):
             for s in similar:
                 n = Node.query.get(s["id"])
                 if n and not any(r["id"] == n.id for r in related):
-                    related.append({"id": n.id, "title": n.title, "tags": n.tags or [], "source": "semantic"})
+                    sc = float(s.get("score") or 0)
+                    related.append({
+                        "id": n.id,
+                        "title": n.title,
+                        "tags": n.tags or [],
+                        "similarity": sc,
+                        "source": "semantic",
+                    })
     except Exception:
         pass
 
@@ -684,26 +1027,96 @@ def get_global_graph():
     if not user:
         return jsonify({"error": "user not found"}), 404
 
-    brains = Brain.query.filter_by(user_id=user.id).all()
+    brains = Brain.query.filter_by(user_id=user.id).order_by(Brain.created_at.desc()).all()
     brain_ids = [b.id for b in brains]
     if not brain_ids:
         return jsonify({"nodes": [], "edges": []}), 200
 
-    nodes = Node.query.filter(Node.brain_id.in_(brain_ids)).all()
-    node_ids = {n.id for n in nodes}
-    edges = NodeRelationship.query.filter(
-        NodeRelationship.source_node_id.in_(node_ids),
-        NodeRelationship.target_node_id.in_(node_ids),
-    ).all()
+    brain_by_id = {b.id: b for b in brains}
+    brain_names = {b.id: b.name for b in brains}
 
-    node_list = [_node_to_json(n) for n in nodes]
-    edge_list = [
-        {"source": e.source_node_id, "target": e.target_node_id, "type": e.edge_type or "related", "weight": e.weight or e.similarity_score}
-        for e in edges
-    ]
+    nodes = Node.query.filter(Node.brain_id.in_(brain_ids)).all()
+    node_list = []
     for n in nodes:
-        for target_id in (n.related_node_ids or []):
-            if target_id in node_ids and not any(ed["source"] == n.id and ed["target"] == target_id for ed in edge_list):
-                edge_list.append({"source": n.id, "target": target_id, "type": "related", "weight": None})
+        j = _node_to_json(n)
+        j["brain_name"] = brain_names.get(n.brain_id)
+        node_list.append(j)
+
+    edge_list = []
+    if nodes:
+        node_ids = {n.id for n in nodes}
+        edges = NodeRelationship.query.filter(
+            NodeRelationship.source_node_id.in_(node_ids),
+            NodeRelationship.target_node_id.in_(node_ids),
+        ).all()
+        edge_list = [
+            {
+                "source": e.source_node_id,
+                "target": e.target_node_id,
+                "type": e.edge_type or "related",
+                "weight": e.weight if e.weight is not None else e.similarity_score,
+            }
+            for e in edges
+        ]
+        for n in nodes:
+            for target_id in (n.related_node_ids or []):
+                if target_id in node_ids and not any(
+                    ed["source"] == n.id and ed["target"] == target_id for ed in edge_list
+                ):
+                    edge_list.append({"source": n.id, "target": target_id, "type": "related", "weight": None})
+
+    # One hub node per brain: shows all workspaces and links brains that share tags
+    tag_sets = defaultdict(set)
+    for n in nodes:
+        tags = n.tags if n.tags is not None else (n.concepts or [])
+        for t in tags or []:
+            if t:
+                tag_sets[n.brain_id].add(str(t).strip().lower())
+
+    for bid in brain_ids:
+        b = brain_by_id[bid]
+        node_list.append(
+            {
+                "id": f"__brain_{bid}",
+                "brain_id": bid,
+                "source_file_id": None,
+                "title": b.name,
+                "markdown_content": "",
+                "tags": ["__brain_hub__"],
+                "node_type": "brain_hub",
+                "summary": f"Workspace · {b.badge}",
+                "created_at": b.created_at.isoformat() if b.created_at else None,
+                "updated_at": None,
+                "related_node_ids": [],
+                "brain_name": b.name,
+            }
+        )
+
+    for i, bid_a in enumerate(brain_ids):
+        for bid_b in brain_ids[i + 1 :]:
+            shared = tag_sets[bid_a] & tag_sets[bid_b]
+            if not shared:
+                continue
+            w = min(len(shared) / 5.0, 1.0) or 0.2
+            edge_list.append(
+                {
+                    "source": f"__brain_{bid_a}",
+                    "target": f"__brain_{bid_b}",
+                    "type": "brain_link",
+                    "weight": w,
+                }
+            )
+
+    # Pull each note toward its brain hub (same layout idea as single-brain graph)
+    if nodes and len(nodes) <= 400:
+        for n in nodes:
+            edge_list.append(
+                {
+                    "source": n.id,
+                    "target": f"__brain_{n.brain_id}",
+                    "type": "in_brain",
+                    "weight": 0.25,
+                }
+            )
 
     return jsonify({"nodes": node_list, "edges": edge_list}), 200

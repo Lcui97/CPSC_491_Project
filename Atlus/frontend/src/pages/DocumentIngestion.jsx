@@ -71,7 +71,16 @@ export default function DocumentIngestion() {
       const errors = result?.errors ?? [];
       if (errors.length > 0) {
         setMessage({ error: errors.join(' ') });
+      } else if (result?.processing) {
+        window.dispatchEvent(new CustomEvent('atlus-ingest-pending', { detail: { pending: true } }));
+        setMessage({
+          info:
+            result?.message ||
+            'Upload received. Processing runs in the background — Sources in the brain view can take several minutes to update (longer for large files).',
+        });
+        setSelectedFiles([]);
       } else {
+        window.dispatchEvent(new CustomEvent('atlus-ingest-pending', { detail: { pending: false } }));
         setMessage({ success: `Ingested ${nodes} node(s), ${links} link(s) created.` });
         setSelectedFiles([]);
       }
@@ -84,7 +93,7 @@ export default function DocumentIngestion() {
 
   return (
     <div className="min-h-screen bg-[rgb(var(--bg))] text-[rgb(var(--text))]">
-      <TopBar />
+      <TopBar breadcrumb="Home › Ingest" />
       <main className="max-w-3xl mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-semibold text-[rgb(var(--text))]">Document Ingestion</h1>
@@ -171,24 +180,33 @@ export default function DocumentIngestion() {
                   </li>
                 ))}
               </ul>
-              {message && (
-                <p className={`mb-3 text-sm ${message.error ? 'text-red-500' : 'text-green-600'}`}>
-                  {message.error || message.success}
-                </p>
-              )}
               <button
                 type="button"
                 onClick={handleIngest}
                 disabled={ingesting || !selectedBrainId}
                 className="w-full py-2 px-4 rounded-lg bg-[rgb(var(--accent))] hover:bg-[rgb(var(--accentHover))] disabled:opacity-50 text-white font-medium transition-colors"
               >
-                {ingesting ? 'Ingesting…' : 'Ingest Documents'}
+                {ingesting ? 'Sending…' : 'Ingest documents'}
               </button>
             </div>
           )}
 
+          {message && (
+            <div
+              className={`rounded-xl border p-4 text-sm ${
+                message.error
+                  ? 'border-red-500/40 bg-red-500/10 text-red-300'
+                  : message.success
+                    ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200'
+                    : 'border-amber-500/30 bg-amber-500/5 text-amber-800'
+              }`}
+            >
+              {message.error || message.success || message.info}
+            </div>
+          )}
+
           <p className="text-sm text-[rgb(var(--muted))]">
-            Supported formats: PDF, DOCX, PPTX, TXT, Markdown. Select a brain above, add files, then click Ingest.
+            Supported formats: PDF, DOCX, PPTX, TXT, Markdown. Ingest is asynchronous — the brain&apos;s Sources list updates when the server finishes (often a few minutes).
           </p>
         </div>
       </main>

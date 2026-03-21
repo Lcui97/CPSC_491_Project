@@ -7,32 +7,30 @@ from app.models.brain import Brain, Node
 
 SEED_TITLES = [
     "Welcome to your Brain",
-    "How to use Notes + Graph",
+    "Handwriting + Markdown",
     "Example links and tags",
 ]
 
 SEED_CONTENT = [
     """# Welcome to your Brain
 
-This is your first note. You can write in **Markdown** and link ideas across notes.
+This is your first note. You can write in **Markdown** and keep ideas organized.
 
-- Use the **Graph** tab to see how notes connect.
-- Add new notes with **+ New Note**.
-- Search and filter in the sidebar.""",
-    """# How to use Notes + Graph
+- Add new notes with **+ New Note** in the sidebar.
+- Upload handwritten pages when you create a brain or use OCR — your **scan shows on the left** and **editable Markdown on the right**.""",
+    """# Handwriting + Markdown
 
 ## Notes
-- Edit in the center panel; use **Edit** / **Preview** / **Split**.
-- Backlinks and related notes appear on the right.
+- Edit in the editor; use **Edit** / **Preview** / **Split**.
+- Related notes and sources appear in the **Context** panel on the right.
 
-## Graph
-- Click a node to open its note.
-- Filter by tag or use "Local graph" to focus one note and its neighbors.""",
+## Scans
+- After OCR, open the note to see the original image beside the transcript.""",
     """# Example links and tags
 
-Add `tags` to notes (e.g. `#concept`, `#todo`) and filter by them in the sidebar.
+Add `tags` to notes (e.g. `#concept`, `#todo`) and explore **Related** in the context panel.
 
-You can reference other notes by title; the graph will show relationships as you add more content.""",
+Reference other notes by title; semantic matches can appear as related ideas.""",
 ]
 
 

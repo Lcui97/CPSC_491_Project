@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { useNode, useUpdateNode } from '../api/brainQueries';
+import { useNode, useUpdateNode, useBrains, useBrainNodes, useBrainSources, useDeleteNode } from '../api/brainQueries';
 import NoteSidebar from '../components/note/NoteSidebar';
 import MarkdownEditor from '../components/note/MarkdownEditor';
 import ContextPanel from '../components/note/ContextPanel';
 import BrainLanding from '../components/note/BrainLanding';
+import HandwrittenSplitEditor from '../components/note/HandwrittenSplitEditor';
 import TopBar from '../components/home/TopBar';
 import BrainExplorerHeader from '../components/note/BrainExplorerHeader';
 
@@ -21,19 +22,40 @@ export default function NoteView() {
 
   const { data: node } = useNode(nodeId);
   const updateMutation = useUpdateNode(nodeId);
+  const { data: brains = [] } = useBrains();
+  const { data: listData } = useBrainNodes(brainId, { page: 1, per_page: 1 });
+  const { data: sources = [] } = useBrainSources(brainId);
+  const deleteNode = useDeleteNode();
 
   const displayNode = node || null;
+  const brainName = brains.find((b) => b.id === brainId)?.name || 'Your brain';
+  const totalNotesInBrain = listData?.total ?? 0;
+  const sourceMeta =
+    displayNode?.source_file_id != null ? sources.find((s) => s.id === displayNode.source_file_id) : null;
+  const sourceFileName = sourceMeta?.filename || '';
+  const showHandwrittenSplit =
+    !!nodeId &&
+    !!displayNode?.source_file_id &&
+    sourceMeta?.file_type === 'image';
 
   useEffect(() => {
-    if (!nodeId) { setTitle(''); setLocalContent(''); }
-    else if (node) { setTitle(node.title || ''); setLocalContent(node.markdown_content ?? ''); }
+    if (!nodeId) {
+      setTitle('');
+      setLocalContent('');
+    } else if (node) {
+      setTitle(node.title || '');
+      setLocalContent(node.markdown_content ?? '');
+    }
   }, [nodeId, node?.title, node?.markdown_content]);
 
   const handleContentChange = useCallback((v) => setLocalContent(v), []);
-  const handleSaveContent = useCallback((markdown) => {
-    if (!nodeId) return;
-    updateMutation.mutate({ markdown_content: markdown });
-  }, [nodeId, updateMutation]);
+  const handleSaveContent = useCallback(
+    (markdown) => {
+      if (!nodeId) return;
+      updateMutation.mutate({ markdown_content: markdown });
+    },
+    [nodeId, updateMutation]
+  );
 
   useEffect(() => {
     if (location.state?.focusTitle && nodeId && titleInputRef.current) {
@@ -64,48 +86,106 @@ export default function NoteView() {
       }
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
-        navigate(`/brain/${brainId}/graph`);
+        navigate(`/brain/${brainId}/notes`);
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [nodeId, localContent, title, brainId, navigate, updateMutation]);
 
+  const dateLabel =
+    displayNode?.updated_at || displayNode?.created_at
+      ? new Date(displayNode.updated_at || displayNode.created_at).toLocaleDateString(undefined, {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+        })
+      : '';
+
   return (
     <div className="min-h-screen bg-[rgb(var(--bg))] text-[rgb(var(--text))] flex flex-col">
-      <TopBar />
+      <TopBar compact breadcrumb={`Home › ${brainName} › Notes`} activeBrainName={brainName} />
       <BrainExplorerHeader
         title={displayNode?.title || (nodeId ? 'Note' : null)}
         right={
-          <button type="button" onClick={() => navigate(`/brain/${brainId}/graph`)} className="text-sm text-[rgb(var(--muted))] hover:text-[rgb(var(--accent))]">
-            Graph
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => navigate(`/brain/${brainId}/sources`)}
+              className="text-sm text-[var(--accent)] hover:underline"
+            >
+              Sources
+            </button>
+            {nodeId ? (
+              <button
+                type="button"
+                disabled={deleteNode.isPending}
+                onClick={() => {
+                  if (!window.confirm(`Delete this note? This cannot be undone.`)) return;
+                  deleteNode.mutate(
+                    { nodeId, brainId },
+                    {
+                      onSuccess: () => navigate(`/brain/${brainId}/notes`),
+                    }
+                  );
+                }}
+                className="text-sm text-red-400/90 hover:text-red-300 disabled:opacity-50"
+              >
+                Delete note
+              </button>
+            ) : null}
+          </div>
         }
       />
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden min-h-0">
         <NoteSidebar onSelectNode={() => {}} />
         <main className="flex-1 flex flex-col overflow-hidden min-w-0">
           {nodeId ? (
-            <>
-              <div className="border-b border-[rgb(var(--border))] bg-[rgb(var(--panel))] px-4 py-2 flex items-center gap-2">
-                <input
-                  ref={titleInputRef}
-                  type="text"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  onBlur={handleTitleBlur}
-                  placeholder="Note title"
-                  className="flex-1 min-w-0 bg-transparent text-lg font-semibold text-[rgb(var(--text))] placeholder:text-[rgb(var(--muted))] focus:outline-none"
-                />
-              </div>
-              <div className="flex-1 min-h-0">
+            showHandwrittenSplit ? (
+              <HandwrittenSplitEditor
+                brainId={brainId}
+                sourceFileId={displayNode.source_file_id}
+                filename={sourceFileName}
+              >
                 <MarkdownEditor
+                  title={title}
+                  onTitleChange={setTitle}
+                  onTitleBlur={handleTitleBlur}
+                  titleInputRef={titleInputRef}
+                  metadata={{
+                    dateLabel,
+                    brainName,
+                    tags: displayNode?.tags || [],
+                    linkedCount: (displayNode?.related_node_ids || []).length,
+                  }}
+                  sourceLabel={sourceFileName}
+                  saveStatus={updateMutation.isPending ? 'saving' : 'saved'}
+                  totalNotesInBrain={totalNotesInBrain}
                   value={localContent}
                   onChange={handleContentChange}
                   onSave={handleSaveContent}
                 />
-              </div>
-            </>
+              </HandwrittenSplitEditor>
+            ) : (
+              <MarkdownEditor
+                title={title}
+                onTitleChange={setTitle}
+                onTitleBlur={handleTitleBlur}
+                titleInputRef={titleInputRef}
+                metadata={{
+                  dateLabel,
+                  brainName,
+                  tags: displayNode?.tags || [],
+                  linkedCount: (displayNode?.related_node_ids || []).length,
+                }}
+                sourceLabel={sourceFileName}
+                saveStatus={updateMutation.isPending ? 'saving' : 'saved'}
+                totalNotesInBrain={totalNotesInBrain}
+                value={localContent}
+                onChange={handleContentChange}
+                onSave={handleSaveContent}
+              />
+            )
           ) : (
             <BrainLanding />
           )}

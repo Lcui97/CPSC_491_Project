@@ -2,16 +2,11 @@ import { create } from 'zustand';
 import { api } from '../api/client';
 
 /**
- * Global cache for brain nodes and graph data. Obsidian-style: load once, cache.
+ * Global cache for brain nodes. Used by ContextPanel for backlinks / related.
  */
-export const useBrainStore = create((set, get) => ({
-  // brainId -> { nodes: [], total, page, per_page } (list cache)
+export const useBrainStore = create((set) => ({
   nodeListCache: {},
-  // brainId -> { nodes: [], edges: [] } (graph cache)
-  graphCache: {},
-  // nodeId -> node (single node cache)
   nodeCache: {},
-  // brainId -> brain info
   brainCache: {},
 
   fetchBrain: async (brainId) => {
@@ -36,16 +31,6 @@ export const useBrainStore = create((set, get) => ({
     return data;
   },
 
-  fetchGraph: async (brainId) => {
-    const data = await api(`/api/brain/${brainId}/graph`);
-    set((s) => ({
-      graphCache: { ...s.graphCache, [brainId]: { nodes: data.nodes, edges: data.edges } },
-    }));
-    return data;
-  },
-
-  getGraph: (brainId) => get().graphCache[brainId] || null,
-
   fetchNode: async (nodeId) => {
     const node = await api(`/api/nodes/${nodeId}`);
     set((s) => ({ nodeCache: { ...s.nodeCache, [nodeId]: node } }));
@@ -56,8 +41,7 @@ export const useBrainStore = create((set, get) => ({
     const node = await api(`/api/nodes/${nodeId}`, { method: 'PUT', body: JSON.stringify(body) });
     set((s) => ({
       nodeCache: { ...s.nodeCache, [nodeId]: node },
-      nodeListCache: {}, // invalidate list caches so next open refetches
-      graphCache: {},   // invalidate graph so it refetches
+      nodeListCache: {},
     }));
     return node;
   },
@@ -69,9 +53,7 @@ export const useBrainStore = create((set, get) => ({
     set((s) => {
       const next = { ...s.nodeListCache };
       delete next[brainId];
-      const nextGraph = { ...s.graphCache };
-      delete nextGraph[brainId];
-      return { nodeListCache: next, graphCache: nextGraph };
+      return { nodeListCache: next };
     });
   },
 }));

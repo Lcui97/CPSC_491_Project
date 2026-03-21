@@ -19,8 +19,16 @@ export default function QuickSwitcher() {
       }
       if (e.key === 'Escape') setOpen(false);
     };
+    const onOpen = () => {
+      setOpen(true);
+      setQ('');
+    };
     window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    window.addEventListener('atlus-open-quick-switcher', onOpen);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('atlus-open-quick-switcher', onOpen);
+    };
   }, []);
 
   useEffect(() => {
@@ -53,29 +61,40 @@ export default function QuickSwitcher() {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh] bg-black/50" onClick={() => setOpen(false)}>
-      <div className="bg-[rgb(var(--panel))] border border-[rgb(var(--border))] rounded-xl shadow-xl w-full max-w-lg overflow-hidden" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh] bg-[color:var(--veil)]" onClick={() => setOpen(false)}>
+      <div
+        className="border rounded-xl shadow-xl w-full max-w-lg overflow-hidden"
+        style={{ background: 'var(--bg2)', borderColor: 'var(--border2)' }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <input
           type="text"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search brains and notes…"
-          className="w-full px-4 py-3 bg-transparent border-b border-[rgb(var(--border))] text-[rgb(var(--text))] placeholder:text-[rgb(var(--muted))] focus:outline-none"
+          className="w-full px-4 py-3 bg-transparent border-b text-[var(--text1)] placeholder:text-[var(--text3)] focus:outline-none"
+          style={{ borderColor: 'var(--border2)' }}
           autoFocus
         />
         <ul className="max-h-72 overflow-y-auto py-2">
-          {loading && <li className="px-4 py-2 text-sm text-[rgb(var(--muted))]">Searching…</li>}
-          {!loading && results.length === 0 && <li className="px-4 py-2 text-sm text-[rgb(var(--muted))]">No results</li>}
+          {loading && <li className="px-4 py-2 text-sm text-[var(--text3)]">Searching…</li>}
+          {!loading && results.length === 0 && <li className="px-4 py-2 text-sm text-[var(--text3)]">No results</li>}
           {results.map((item) => (
             <li key={item.type + item.id}>
-              <button type="button" onClick={() => handleSelect(item)} className="w-full text-left px-4 py-2 text-sm text-[rgb(var(--text))] hover:bg-[rgb(var(--panel2))] flex items-center gap-2">
-                <span className="text-[rgb(var(--muted))]">{item.type === 'brain' ? 'Brain' : 'Note'}</span>
+              <button
+                type="button"
+                onClick={() => handleSelect(item)}
+                className="w-full text-left px-4 py-2 text-sm text-[var(--text1)] hover:bg-[var(--bg4)] flex items-center gap-2"
+              >
+                <span className="mono text-[10px] text-[var(--text3)]">{item.type === 'brain' ? 'Brain' : 'Note'}</span>
                 {item.title || 'Untitled'}
               </button>
             </li>
           ))}
         </ul>
-        <p className="px-4 py-2 text-xs text-[rgb(var(--muted))] border-t border-[rgb(var(--border))]">⌘K to toggle · Esc to close</p>
+        <p className="px-4 py-2 text-xs text-[var(--text3)] border-t mono" style={{ borderColor: 'var(--border2)' }}>
+          ⌘K to toggle · Esc to close
+        </p>
       </div>
     </div>
   );

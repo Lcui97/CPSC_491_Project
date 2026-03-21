@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import ShareBrainModal from './ShareBrainModal';
 import BrainCreateModal from './BrainCreateModal';
 import { api } from '../../api/client';
+import { useDeleteBrain, useLeaveBrain } from '../../api/brainQueries';
 
 // Key used to store/retrieve brains from localStorage (persists across refreshes)
 const BRAINS_STORAGE_KEY = 'atlus_brains';
@@ -26,7 +27,7 @@ function saveBrainsToStorage(brains) {
   localStorage.setItem(BRAINS_STORAGE_KEY, JSON.stringify(brains));
 }
 
-export default function BrainFilters({ activeBrainId, onEnterBrain, onCollapseSidebar }) {
+export default function BrainFilters({ activeBrainId, onEnterBrain, onCollapseSidebar, onBrainRemoved }) {
   // List of brain objects displayed in the UI
   // NOTE: loadBrains() runs immediately here, so this uses whatever is in localStorage
   const [brains, setBrains] = useState(loadBrainsFromStorage());
@@ -41,14 +42,16 @@ export default function BrainFilters({ activeBrainId, onEnterBrain, onCollapseSi
   // Holds the brain object we’re currently sharing (or null if not sharing)
   const [shareBrain, setShareBrain] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const deleteBrain = useDeleteBrain();
+  const leaveBrain = useLeaveBrain();
+  const removePending = deleteBrain.isPending || leaveBrain.isPending;
 
   useEffect(() => {
     api('/api/brain/list')
       .then((res) => {
-        if (res.brains && res.brains.length > 0) {
-          setBrains(res.brains);
-          setSelected(new Set(res.brains.map((x) => x.id)));
-        }
+        const list = Array.isArray(res.brains) ? res.brains : [];
+        setBrains(list);
+        setSelected(new Set(list.map((x) => x.id)));
       })
       .catch(() => {});
   }, []);
@@ -73,16 +76,36 @@ export default function BrainFilters({ activeBrainId, onEnterBrain, onCollapseSi
     });
   }
 
-  function removeBrain(id) {
-    // Remove the brain from the brains array
-    setBrains((prev) => prev.filter((b) => b.id !== id));
-
-    // Also remove its id from the selected Set (so we don't keep a "ghost" selection)
-    setSelected((prev) => {
-      const next = new Set(prev);
-      next.delete(id);
-      return next;
-    });
+  function handleRemoveBrain(brain) {
+    const isOwner = brain.is_owner !== false;
+    const syncLocal = (id) => {
+      setBrains((prev) => prev.filter((b) => b.id !== id));
+      setSelected((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      onBrainRemoved?.(id);
+    };
+    if (isOwner) {
+      if (
+        !window.confirm(
+          `Delete “${brain.name}” and all its notes, sources, and uploaded files? This cannot be undone.`
+        )
+      ) {
+        return;
+      }
+      deleteBrain.mutate(brain.id, {
+        onSuccess: () => syncLocal(brain.id),
+        onError: (err) => window.alert(err.message || 'Could not delete brain'),
+      });
+    } else {
+      if (!window.confirm(`Leave “${brain.name}”? You can rejoin only if someone shares it again.`)) return;
+      leaveBrain.mutate(brain.id, {
+        onSuccess: () => syncLocal(brain.id),
+        onError: (err) => window.alert(err.message || 'Could not leave brain'),
+      });
+    }
   }
 
   function addBrain() {
@@ -169,37 +192,40 @@ export default function BrainFilters({ activeBrainId, onEnterBrain, onCollapseSi
               <span className="text-xs text-[rgb(var(--muted))]">{brain.badge}</span>
             </button>
 
-            {/* Share button opens modal */}
-            <button
-              type="button"
-              onClick={(e) => handleShare(e, brain)}
-              className="shrink-0 w-6 h-6 flex items-center justify-center rounded text-[rgb(var(--muted))] hover:text-[rgb(var(--accent))] hover:bg-[rgb(var(--accent))]/10 transition-colors"
-              title="Share brain"
-            >
-              {/* Share icon */}
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
+            {/* Share — owners only */}
+            {brain.is_owner !== false ? (
+              <button
+                type="button"
+                onClick={(e) => handleShare(e, brain)}
+                className="shrink-0 w-6 h-6 flex items-center justify-center rounded text-[rgb(var(--muted))] hover:text-[rgb(var(--accent))] hover:bg-[rgb(var(--accent))]/10 transition-colors"
+                title="Share brain"
               >
-                <circle cx="18" cy="5" r="3" />
-                <circle cx="6" cy="12" r="3" />
-                <circle cx="18" cy="19" r="3" />
-                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
-                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-              </svg>
-            </button>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <circle cx="18" cy="5" r="3" />
+                  <circle cx="6" cy="12" r="3" />
+                  <circle cx="18" cy="19" r="3" />
+                  <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                  <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+                </svg>
+              </button>
+            ) : (
+              <span className="shrink-0 w-6 h-6" aria-hidden />
+            )}
 
-            {/* Remove brain button */}
             <button
               type="button"
-              onClick={() => removeBrain(brain.id)}
-              className="shrink-0 w-6 h-6 flex items-center justify-center rounded text-[rgb(var(--muted))] hover:text-red-500 hover:bg-red-500/10 transition-colors"
-              title="Remove brain"
+              disabled={removePending}
+              onClick={() => handleRemoveBrain(brain)}
+              className="shrink-0 w-6 h-6 flex items-center justify-center rounded text-[rgb(var(--muted))] hover:text-red-500 hover:bg-red-500/10 transition-colors disabled:opacity-40"
+              title={brain.is_owner === false ? 'Leave shared brain' : 'Delete brain'}
             >
               −
             </button>

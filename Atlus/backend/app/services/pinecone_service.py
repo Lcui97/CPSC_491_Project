@@ -101,3 +101,32 @@ def similarity_search(
         if len(out) >= top_k:
             break
     return out
+
+
+def delete_brain_namespace(brain_id: str) -> None:
+    """Remove all vectors for a brain namespace (when deleting a brain)."""
+    index = _index()
+    if index is None:
+        return
+    ns = str(brain_id)
+    try:
+        if hasattr(index, "delete_namespace"):
+            index.delete_namespace(namespace=ns)
+        else:
+            index.delete(delete_all=True, namespace=ns)
+    except Exception:
+        try:
+            index.delete(delete_all=True, namespace=ns)
+        except Exception:
+            pass
+
+
+def delete_vectors(brain_id: str, vector_ids: list) -> None:
+    """Remove embeddings for deleted nodes (no-op when Pinecone not configured)."""
+    index = _index()
+    if index is None or not vector_ids:
+        return
+    clean = [str(v) for v in vector_ids if v]
+    if not clean:
+        return
+    index.delete(ids=clean, namespace=brain_id)

@@ -3,7 +3,7 @@ import { api, apiUpload } from '../../api/client';
 
 const API_URL = import.meta.env.VITE_API_URL ?? '';
 
-const ACCEPT = '.pdf,.txt,.md,.markdown,.jpg,.jpeg,.png';
+const ACCEPT = '.pdf,.docx,.pptx,.txt,.md,.markdown,.jpg,.jpeg,.png,.webp,.gif';
 const BADGES = ['Notes', 'Textbook', 'Compare'];
 
 export default function BrainCreateModal({ onClose, onCreated }) {
@@ -20,8 +20,8 @@ export default function BrainCreateModal({ onClose, onCreated }) {
   const [ocrResult, setOcrResult] = useState(null);
   const [ocrLoading, setOcrLoading] = useState(false);
 
-  const isImage = (file) => /\.(jpe?g|png)$/i.test(file.name);
-  const pdfOrText = (file) => /\.(pdf|txt|md|markdown)$/i.test(file.name);
+  const isImage = (file) => /\.(jpe?g|png|webp|gif)$/i.test(file.name);
+  const pdfOrText = (file) => /\.(pdf|docx|pptx|txt|md|markdown)$/i.test(file.name);
 
   const handleDrag = useCallback((e) => {
     e.preventDefault();
@@ -121,6 +121,8 @@ export default function BrainCreateModal({ onClose, onCreated }) {
         body: JSON.stringify({
           brain_id: createdBrain.id,
           markdown: ocrResult.markdown,
+          source_file_id: ocrResult.source_file_id ?? undefined,
+          node_type: ocrResult.source_file_id ? 'handwritten' : undefined,
         }),
       });
       if (currentImageIndex + 1 >= pendingImages.length) {
@@ -148,7 +150,7 @@ export default function BrainCreateModal({ onClose, onCreated }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[color:var(--veil)]" onClick={onClose}>
       <div
         className="bg-[rgb(var(--panel))] border border-[rgb(var(--border))] rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
@@ -213,7 +215,7 @@ export default function BrainCreateModal({ onClose, onCreated }) {
                   }`}
                 >
                   <p className="text-[rgb(var(--muted))] text-sm mb-3">
-                    PDF, JPEG/PNG, TXT, Markdown
+                    PDF, DOCX, PPTX, TXT, Markdown, or JPEG/PNG (handwriting uses OCR after create)
                   </p>
                   <input
                     type="file"
@@ -266,7 +268,9 @@ export default function BrainCreateModal({ onClose, onCreated }) {
                 {!ocrResult ? (
                   <div className="h-full flex flex-col items-center justify-center text-center">
                     {ocrLoading ? (
-                      <p className="text-[rgb(var(--muted))] text-sm">Converting to Markdown…</p>
+                      <p className="text-[rgb(var(--muted))] text-sm">
+                        Converting to Markdown… This can take a few minutes for PDFs or scans.
+                      </p>
                     ) : (
                       <>
                         <p className="text-[rgb(var(--muted))] text-sm mb-3">

@@ -1,19 +1,85 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Lora:ital,wght@0,400;1,400&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --bg: 235 230 223;        /* light beige #EBE6DF */
-  --panel: 245 242 238;     /* slightly lighter */
-  --panel2: 232 227 221;    /* soft shadow tone */
-  --border: 201 192 182;    /* warm grey border */
-  --text: 89 82 79;         /* charcoal #59524F */
-  --muted: 130 120 115;     /* muted charcoal */
-  --accent: 231 111 81;     /* coral #E76F51 */
-  --accentHover: 209 90 60; /* darker coral */
+  /* Brand: Pantone 647C / 298C + Cool Gray 4 & 2 */
+  --brand-navy: 0 85 153;
+  --brand-cyan: 19 181 234;
+
+  /* Light mode shell */
+  --bg: 231 231 232;
+  --panel: 255 255 255;
+  --panel2: 247 248 250;
+  --border: 201 202 204;
+  --text: 33 37 41;
+  --muted: 108 117 125;
+
+  --accent: var(--brand-cyan);
+  --accentHover: var(--brand-navy);
+
+  --bg2: #ffffff;
+  --bg3: #f4f5f7;
+  --bg4: #eceef2;
+  --border2: rgba(15, 23, 42, 0.1);
+  --text1: #1a1d21;
+  --text2: #5c6370;
+  --text3: #868d9a;
+
+  --accent-glow: rgba(19, 181, 234, 0.16);
+  --accent-40: rgba(19, 181, 234, 0.45);
+  --accent-20: rgba(19, 181, 234, 0.22);
+  --accent-27: rgba(19, 181, 234, 0.3);
+
+  /* Hairline borders and muted fills (light theme) */
+  --hairline: rgba(15, 23, 42, 0.1);
+  --hairline-strong: rgba(15, 23, 42, 0.14);
+  --hairline-hover: rgba(15, 23, 42, 0.2);
+  --hairline-dash: rgba(15, 23, 42, 0.24);
+  --hairline-faint: rgba(15, 23, 42, 0.06);
+  --fill-muted: rgba(15, 23, 42, 0.05);
+  --fill-well: rgba(15, 23, 42, 0.06);
+  --veil: rgba(15, 23, 42, 0.45);
+
+  --teal: #0d9488;
+  --teal-dim: rgba(13, 148, 136, 0.12);
+  --amber: #d97706;
+  --green: #16a34a;
+  --red: #dc2626;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
 }
 
 body {
   margin: 0;
-  min-height: 100vh;
+  font-family: 'Inter', system-ui, sans-serif;
+  background: rgb(var(--bg));
+  color: var(--text1);
+}
+
+.mono {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.atlus-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  height: 52px;
+  background: rgba(255, 255, 255, 0.9);
+  border-bottom: 1px solid var(--hairline-strong);
+  backdrop-filter: blur(12px);
+}
+
+.atlus-topbar.compact {
+  height: 48px;
 }

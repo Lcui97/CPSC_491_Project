@@ -78,3 +78,25 @@ class NodeRelationship(db.Model):
     __table_args__ = (
         db.UniqueConstraint("source_node_id", "target_node_id", name="uq_node_relationship"),
     )
+
+
+class BrainShareLink(db.Model):
+    """Shareable invite link for a brain (owner creates; others join via token)."""
+    __tablename__ = "brain_share_links"
+
+    id = db.Column(db.Integer, primary_key=True)
+    token = db.Column(db.String(64), unique=True, nullable=False, index=True)
+    brain_id = db.Column(db.String(64), db.ForeignKey("brains.id"), nullable=False, index=True)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), server_default=db.func.now())
+
+
+class BrainCollaborator(db.Model):
+    """User granted access to someone else's brain via share link."""
+    __tablename__ = "brain_collaborators"
+
+    id = db.Column(db.Integer, primary_key=True)
+    brain_id = db.Column(db.String(64), db.ForeignKey("brains.id"), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+
+    __table_args__ = (db.UniqueConstraint("brain_id", "user_id", name="uq_brain_collaborator"),)

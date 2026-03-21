@@ -2,7 +2,7 @@ export default function GeometricBackground({ children, className = '' }) {
   return (
     <div className={`relative min-h-screen overflow-hidden ${className}`}>
       {/* Base light beige background */}
-      <div className="absolute inset-0 bg-[#EBE6DF]" />
+      <div className="absolute inset-0 bg-[#E7E7E8]" />
 
       {/* Grid pattern - top-left */}
       <svg

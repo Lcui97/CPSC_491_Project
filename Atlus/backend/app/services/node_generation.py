@@ -52,6 +52,7 @@ def generate_and_store_nodes(
     chunks: List[Dict[str, Any]] | None = None,
     markdown: str | None = None,
     source_file_id: int | None = None,
+    node_type: str | None = None,
 ) -> dict:
     """
     chunks: list of { "text", "section_title?", "source_file_id?" } (from textbook pipeline).
@@ -114,6 +115,7 @@ def generate_and_store_nodes(
             concepts=payloads[i].get("concepts"),
             section_title=(payloads[i].get("section_title") or "")[:512] or None,
             tags=payloads[i].get("concepts"),
+            node_type=p.get("node_type") or "note",
             embedding_id=node_ids[i],
             metadata_json={
                 "source_reference": str(p.get("source_file_id") or ""),
@@ -145,3 +147,51 @@ def generate_and_store_nodes(
         "node_ids": node_ids,
         "links_created": links_created,
     }
+
+
+def relink_user_note(node_id: str, brain_id: str) -> None:
+    """
+    Embed a user-written note (create/update) and refresh related_node_ids via Pinecone similarity.
+    Ingested chunks already get links inside generate_and_store_nodes; this covers manual notes.
+    Requires OPENAI_API_KEY + PINECONE for meaningful matches; fails soft if unavailable.
+    """
+    node = Node.query.get(node_id)
+    if not node or node.brain_id != brain_id:
+        return
+    tags = node.tags if node.tags is not None else (node.concepts or [])
+    text = (
+        f"{node.title or ''}\n{node.summary or ''}\n"
+        + " ".join([str(t) for t in (tags or [])[:10]])
+        + "\n"
+        + (node.markdown_content or node.raw_content or "")
+    )
+    text = (text or "").strip()
+    if not text:
+        return
+    try:
+        emb = get_embedding(text[:8000])
+    except Exception:
+        return
+    meta = {
+        "brain_id": brain_id,
+        "section_title": "",
+        "tags": ",".join([str(x) for x in tags][:15]) if tags else "",
+        "source_reference": str(node.source_file_id or ""),
+        "node_id": node.id,
+    }
+    try:
+        upsert_vectors(brain_id, [emb], [node.id], [meta])
+        node.embedding_id = node.id
+    except Exception:
+        return
+    try:
+        similar = similarity_search(
+            brain_id, emb, top_k=6, threshold=LINK_THRESHOLD, exclude_ids=[node_id]
+        )
+        node.related_node_ids = [s["id"] for s in similar]
+    except Exception:
+        pass
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()

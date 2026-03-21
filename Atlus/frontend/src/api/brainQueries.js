@@ -5,16 +5,21 @@ export const brainKeys = {
   list: () => ['brains'],
   nodes: (brainId, params) => ['brains', brainId, 'nodes', params],
   node: (nodeId) => ['nodes', nodeId],
-  graph: (brainId) => ['brains', brainId, 'graph'],
-  globalGraph: () => ['graph', 'global'],
   meSummary: () => ['me', 'summary'],
+  meActivity: (limit) => ['me', 'activity', limit],
+  meNotes: (params) => ['me', 'notes', params],
   sources: (brainId) => ['brains', brainId, 'sources'],
 };
 
 export function useBrains() {
   return useQuery({
     queryKey: brainKeys.list(),
-    queryFn: () => api('/api/brain/list').then((r) => r.brains || []),
+    queryFn: () =>
+      api('/api/brain/list').then((r) => {
+        const b = r?.brains;
+        return Array.isArray(b) ? b : [];
+      }),
+    select: (d) => (Array.isArray(d) ? d : []),
   });
 }
 
@@ -41,25 +46,70 @@ export function useNode(nodeId) {
   });
 }
 
-export function useBrainGraph(brainId) {
-  return useQuery({
-    queryKey: brainKeys.graph(brainId),
-    queryFn: () => api(`/api/brain/${brainId}/graph`),
-    enabled: !!brainId,
-  });
-}
-
-export function useGlobalGraph() {
-  return useQuery({
-    queryKey: brainKeys.globalGraph(),
-    queryFn: () => api('/api/graph/global'),
-  });
-}
-
 export function useMeSummary() {
   return useQuery({
     queryKey: brainKeys.meSummary(),
     queryFn: () => api('/api/me/summary'),
+  });
+}
+
+export function useMeActivity(limit = 8) {
+  return useQuery({
+    queryKey: brainKeys.meActivity(limit),
+    queryFn: () => api(`/api/me/activity?limit=${limit}`).then((r) => r.items || []),
+  });
+}
+
+export function useAllMyNotes(params = {}) {
+  const { page = 1, per_page = 48, q = '' } = params;
+  const notesKey = ['me', 'notes', { page, per_page, q }];
+  return useQuery({
+    queryKey: notesKey,
+    queryFn: () => {
+      const search = new URLSearchParams({ page: String(page), per_page: String(per_page) });
+      if (q) search.set('q', q);
+      return api(`/api/me/notes?${search}`);
+    },
+  });
+}
+
+export function useDeleteNode() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ nodeId }) => api(`/api/nodes/${nodeId}`, { method: 'DELETE' }),
+    onSuccess: (_data, { nodeId, brainId }) => {
+      queryClient.removeQueries({ queryKey: brainKeys.node(nodeId) });
+      queryClient.invalidateQueries({ queryKey: ['me', 'notes'] });
+      queryClient.invalidateQueries({ queryKey: brainKeys.meSummary() });
+      queryClient.invalidateQueries({ queryKey: brainKeys.list() });
+      if (brainId) {
+        queryClient.invalidateQueries({ queryKey: ['brains', brainId, 'nodes'] });
+        queryClient.invalidateQueries({ queryKey: brainKeys.sources(brainId) });
+      }
+    },
+  });
+}
+
+export function useDeleteBrain() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (brainId) => api(`/api/brain/${brainId}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: brainKeys.list() });
+      queryClient.invalidateQueries({ queryKey: ['me', 'notes'] });
+      queryClient.invalidateQueries({ queryKey: ['me', 'activity'] });
+      queryClient.invalidateQueries({ queryKey: brainKeys.meSummary() });
+    },
+  });
+}
+
+export function useLeaveBrain() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (brainId) => api(`/api/brain/${brainId}/leave`, { method: 'POST' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: brainKeys.list() });
+    },
   });
 }
 
@@ -70,6 +120,10 @@ export function useUpdateNode(nodeId) {
     onSuccess: (data) => {
       queryClient.setQueryData(brainKeys.node(nodeId), data);
       queryClient.invalidateQueries({ queryKey: ['brains'] });
+      queryClient.invalidateQueries({ queryKey: ['me', 'notes'] });
+      if (data?.brain_id) {
+        queryClient.invalidateQueries({ queryKey: ['brains', data.brain_id] });
+      }
     },
   });
 }
@@ -80,7 +134,20 @@ export function useCreateNode(brainId) {
     mutationFn: (body) => api(`/api/brain/${brainId}/nodes`, { method: 'POST', body: JSON.stringify(body) }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['brains', brainId] });
-      queryClient.invalidateQueries({ queryKey: brainKeys.globalGraph() });
+      queryClient.invalidateQueries({ queryKey: ['brains', brainId, 'nodes'] });
+      queryClient.invalidateQueries({ queryKey: brainKeys.meSummary() });
+    },
+  });
+}
+
+export function useDeleteSource(brainId) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (sourceId) => api(`/api/brain/${brainId}/sources/${sourceId}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: brainKeys.sources(brainId) });
+      queryClient.invalidateQueries({ queryKey: ['brains', brainId] });
+      queryClient.invalidateQueries({ queryKey: ['nodes'] });
       queryClient.invalidateQueries({ queryKey: brainKeys.meSummary() });
     },
   });
@@ -97,7 +164,12 @@ export function useBrainSources(brainId) {
 export function useBrainAsk(brainId) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (body) => api(`/api/brain/${brainId}/ask`, { method: 'POST', body: JSON.stringify(body) }),
+    mutationFn: (body) => {
+      if (!brainId) {
+        return Promise.reject(new Error('Select a brain in the sidebar first.'));
+      }
+      return api(`/api/brain/${brainId}/ask`, { method: 'POST', body: JSON.stringify(body) });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: brainKeys.sources(brainId) });
       queryClient.invalidateQueries({ queryKey: brainKeys.nodes(brainId, {}) });

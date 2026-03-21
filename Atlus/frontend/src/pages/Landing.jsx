@@ -1,6 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import GeometricBackground from '../components/GeometricBackground';
+import AtlusLogo from '../components/AtlusLogo';
 
 export default function Landing() {
   const [email, setEmail] = useState('');
@@ -17,7 +18,8 @@ export default function Landing() {
         {/* Header */}
         <header className="flex items-center justify-between px-6 py-4">
           <div className="flex items-center gap-8">
-            <Link to="/" className="text-xl font-semibold text-[rgb(var(--text))]">
+            <Link to="/" className="flex items-center gap-2 text-xl font-semibold text-[rgb(var(--text))]">
+              <AtlusLogo size={32} className="rounded-xl border border-[rgb(var(--border))] bg-black" />
               Atlus
             </Link>
             <nav className="hidden sm:flex items-center gap-6 text-sm text-[rgb(var(--muted))]">
@@ -51,7 +53,7 @@ export default function Landing() {
             The future of knowledge happens together
           </h1>
           <p className="mt-4 text-lg text-[rgb(var(--muted))]">
-            Tools and trends evolve, but learning endures. With Atlus, notes, textbooks, and AI come together in one knowledge graph.
+            Turn handwritten pages into structured notes: your scan stays beside the Markdown you edit.
           </p>
 
           <form onSubmit={handleSubmit} className="mt-8 flex flex-col sm:flex-row gap-3 w-full max-w-xl">

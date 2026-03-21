@@ -5,7 +5,8 @@ import Login from './pages/Login';
 import Home from './pages/Home';
 import Brain from './pages/Brain';
 import NoteView from './pages/NoteView';
-import BrainGraphView from './pages/BrainGraphView';
+import NotesGallery from './pages/NotesGallery';
+import BrainSourcesView from './pages/BrainSourcesView';
 import DocumentIngestion from './pages/DocumentIngestion';
 import KnowledgeGapAnalysis from './pages/KnowledgeGapAnalysis';
 import SharedBrain from './pages/SharedBrain';
@@ -24,6 +25,14 @@ function App() {
         element={
           <ProtectedRoute>
             <Home />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/home/notes"
+        element={
+          <ProtectedRoute>
+            <NotesGallery />
           </ProtectedRoute>
         }
       />
@@ -52,10 +61,10 @@ function App() {
         }
       />
       <Route
-        path="/brain/:brainId/graph"
+        path="/brain/:brainId/sources"
         element={
           <ProtectedRoute>
-            <BrainGraphView />
+            <BrainSourcesView />
           </ProtectedRoute>
         }
       />

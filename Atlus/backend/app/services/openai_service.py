@@ -2,9 +2,12 @@
 OpenAI: embeddings and node generation (summaries, concepts, relationships).
 When OPENAI_API_KEY is not set, runs in local-only mode: stub embeddings, simple text extraction for nodes.
 """
+import base64
+import io
 import os
 import json
-from typing import List, Dict, Any
+import re
+from typing import List, Dict, Any, Tuple
 
 try:
     from openai import OpenAI
@@ -24,7 +27,7 @@ def _has_openai() -> bool:
 def _get_client():
     global _client
     if _client is None:
-        key = os.environ.get("OPENAI_API_KEY")
+        key = (os.environ.get("OPENAI_API_KEY") or "").strip()
         if not key:
             raise RuntimeError("OPENAI_API_KEY not set")
         if OpenAI is None:
@@ -101,6 +104,96 @@ def generate_node_from_chunk(chunk_text: str, section_title: str | None = None) 
     if raw.startswith("```"):
         raw = raw.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
     return json.loads(raw)
+
+
+def _prepare_image_bytes_for_vision(image_bytes: bytes) -> Tuple[bytes, str]:
+    """
+    Normalize to RGB JPEG, downscale very large pages so the API stays within limits.
+    Returns (bytes, mime_type).
+    """
+    from PIL import Image
+
+    img = Image.open(io.BytesIO(image_bytes))
+    if img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info):
+        background = Image.new("RGB", img.size, (255, 255, 255))
+        rgba = img.convert("RGBA")
+        background.paste(rgba, mask=rgba.split()[3])
+        img = background
+    else:
+        img = img.convert("RGB")
+
+    max_side = int((os.environ.get("OCR_IMAGE_MAX_SIDE") or "3072").strip() or "3072")
+    w, h = img.size
+    if max(w, h) > max_side:
+        scale = max_side / max(w, h)
+        img = img.resize((int(w * scale), int(h * scale)), Image.Resampling.LANCZOS)
+
+    out = io.BytesIO()
+    quality = int((os.environ.get("OCR_JPEG_QUALITY") or "90").strip() or "90")
+    quality = max(60, min(quality, 100))
+    img.save(out, format="JPEG", quality=quality, optimize=True)
+    return out.getvalue(), "image/jpeg"
+
+
+VISION_HANDWRITING_SYSTEM = """You transcribe handwritten notes from images into clean, editable Markdown.
+
+Rules:
+- Read the page carefully and copy the content faithfully. Do not invent words or facts.
+- If something is unreadable, write [illegible] instead of guessing.
+- Preserve structure: use ## or ### for headings, - for bullets, 1. for numbered lists; indent nested items.
+- Use **bold** for clear emphasis or defined terms on the page.
+- For math, use inline $...$ or block $$...$$ when you see equations or formulas.
+- For simple tables or two-column layout, use a Markdown table or headings if it improves clarity.
+
+Output ONLY the Markdown document. No preamble, no closing commentary. Do not wrap the answer in a ``` code fence."""
+
+
+def handwriting_image_to_markdown(image_bytes: bytes, filename: str = "") -> Tuple[str, str]:
+    """
+    Primary handwriting path: GPT-4o (vision) reads the image and returns structured Markdown.
+    Returns (markdown, plain_text_preview) for APIs that expose raw_text.
+    """
+    if not _has_openai():
+        raise RuntimeError("OPENAI_API_KEY required for vision handwriting OCR")
+
+    jpeg_bytes, mime = _prepare_image_bytes_for_vision(image_bytes)
+    model = (os.environ.get("OCR_VISION_MODEL") or "gpt-4o").strip() or "gpt-4o"
+    b64 = base64.standard_b64encode(jpeg_bytes).decode("ascii")
+    data_url = f"data:{mime};base64,{b64}"
+
+    client = _get_client()
+    response = client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": VISION_HANDWRITING_SYSTEM},
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "Transcribe this handwritten page into Markdown following the rules above.",
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": data_url, "detail": "high"},
+                    },
+                ],
+            },
+        ],
+        temperature=0.1,
+        max_tokens=8192,
+    )
+    markdown = (response.choices[0].message.content or "").strip()
+    if markdown.startswith("```"):
+        markdown = re.sub(r"^```(?:markdown|md)?\s*\n?", "", markdown, flags=re.IGNORECASE)
+        markdown = re.sub(r"\n?```\s*$", "", markdown).strip()
+
+    plain = re.sub(r"#+\s*", "", markdown)
+    plain = re.sub(r"\*\*([^*]+)\*\*", r"\1", plain)
+    plain = re.sub(r"`([^`]+)`", r"\1", plain)
+    plain_preview = plain.strip()[:5000]
+
+    return markdown, plain_preview
 
 
 def generate_markdown_structure(ocr_text: str) -> str:

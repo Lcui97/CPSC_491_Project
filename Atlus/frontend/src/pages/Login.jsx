@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { GoogleLogin } from '@react-oauth/google';
 import { register, login, googleLogin, checkBackendHealth } from '../api/auth';
+import AtlusLogo from '../components/AtlusLogo';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -74,7 +75,7 @@ export default function Login() {
   const showGoogleLogin = clientId && !isLocalhost;
 
   return (
-    <div className="min-h-screen bg-[#EBE6DF] text-[rgb(var(--text))] flex items-center justify-center p-4 relative overflow-hidden">
+    <div className="min-h-screen bg-[#E7E7E8] text-[#212529] flex items-center justify-center p-4 relative overflow-hidden">
       <div className="absolute top-0 right-0 w-64 h-64 opacity-20">
         <svg viewBox="0 0 100 100" className="w-full h-full">
           <defs>
@@ -91,10 +92,13 @@ export default function Login() {
           <polygon points="0,100 0,0 100,100" fill="#59524F" />
         </svg>
       </div>
-      <div className="w-full max-w-sm bg-white/90 backdrop-blur border border-[rgb(var(--border))] rounded-xl p-6 shadow-lg relative z-10">
+      <div className="w-full max-w-sm bg-white/95 backdrop-blur border border-[#C9CACC] rounded-xl p-6 shadow-lg relative z-10">
         <div className="text-center mb-6">
-          <h1 className="text-xl font-semibold text-[rgb(var(--text))]">Atlus</h1>
-          <p className="text-sm text-[rgb(var(--muted))] mt-1">Your knowledge base, connected.</p>
+          <div className="flex justify-center mb-3">
+            <AtlusLogo size={56} className="rounded-2xl border border-[#C9CACC] shadow-sm bg-black" />
+          </div>
+          <h1 className="text-xl font-semibold text-[#212529]">Atlus</h1>
+          <p className="text-sm text-[#495057] mt-1">Your knowledge base, connected.</p>
           {backendOk === false && (
             <p className="text-xs text-amber-600 mt-2">Backend unreachable. Is the server running on port 5000?</p>
           )}
@@ -133,7 +137,7 @@ export default function Login() {
             <button
               type="button"
               onClick={() => { setIsRegister((v) => !v); setError(''); }}
-              className="py-2 px-4 rounded-lg border border-[rgb(var(--border))] text-[rgb(var(--muted))] hover:bg-[#EBE6DF]/60 transition-colors text-sm"
+              className="py-2 px-4 rounded-lg border border-[#C9CACC] text-[#495057] hover:bg-[#E7E7E8] transition-colors text-sm"
             >
               {isRegister ? 'Login' : 'Register'}
             </button>
@@ -149,7 +153,7 @@ export default function Login() {
           </div>
         )}
         {isLocalhost && (
-          <p className="mt-4 text-xs text-[rgb(var(--muted))] text-center">
+          <p className="mt-4 text-xs text-[#6c757d] text-center">
             Use email and password above. Google Sign-In is hidden on localhost to avoid origin/403 errors; it will appear when you deploy.
           </p>
         )}
