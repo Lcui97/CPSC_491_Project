@@ -1,4 +1,4 @@
-/** Served from `public/atlus-logo.png` (Vite root). */
+/** PNG lives in public/ — Vite serves it at /atlus-logo.png */
 const LOGO_SRC = '/atlus-logo.png';
 
 export default function AtlusLogo({ className = '', size = 28, alt = 'Atlus' }) {

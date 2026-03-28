@@ -14,7 +14,7 @@ export default function Home() {
   const [ingestPendingBanner, setIngestPendingBanner] = useState(false);
   const didAutoPickBrain = useRef(false);
 
-  /** Pick a default brain once lists load so chat matches a real brain. */
+  // First brain wins for chat until the user picks something else
   useEffect(() => {
     if (brains.length === 0) {
       didAutoPickBrain.current = false;
@@ -51,7 +51,7 @@ export default function Home() {
   );
 
   const brainName = activeBrain?.name || null;
-  /** Same fallback as chat/sidebar so quick actions aren’t greyed out when a brain exists but nothing is “focused”. */
+  // Home tiles need a brain even if the sidebar hasn’t “focused” one yet
   const brainForActions = activeBrain || brains[0] || null;
 
   return (
@@ -93,10 +93,11 @@ export default function Home() {
               </div>
             ))}
           </div>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
             {[
               { label: 'All notes', desc: 'Gallery of every note — open or delete', action: () => navigate('/home/notes') },
               { label: 'Ingest file', desc: 'Upload PDF, DOCX, PPTX, or markdown', action: () => navigate('/ingest') },
+              { label: 'Calendar', desc: 'Deadlines and assessment schedule', action: () => navigate('/calendar') },
               {
                 label: 'Workspace',
                 desc: 'Notes + uploads for the selected brain',

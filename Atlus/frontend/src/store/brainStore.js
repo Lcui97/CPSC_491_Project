@@ -1,9 +1,7 @@
 import { create } from 'zustand';
 import { api } from '../api/client';
 
-/**
- * Global cache for brain nodes. Used by ContextPanel for backlinks / related.
- */
+/** Lightweight client-side cache so context panels don’t hammer list endpoints. */
 export const useBrainStore = create((set) => ({
   nodeListCache: {},
   nodeCache: {},

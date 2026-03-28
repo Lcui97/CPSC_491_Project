@@ -1,6 +1,4 @@
-"""
-Idempotent seed example notes for a new Brain. Creates 2-3 markdown nodes if not already present.
-"""
+"""Drop in a few starter markdown notes once per new brain (no-op if we already did)."""
 import uuid
 from app.extensions import db
 from app.models.brain import Brain, Node
@@ -35,10 +33,7 @@ Reference other notes by title; semantic matches can appear as related ideas."""
 
 
 def ensure_seed_nodes(brain_id: str) -> int:
-    """
-    Create seed nodes for the brain if not already created. Idempotent.
-    Returns number of nodes created (0 if already seeded).
-    """
+    """Insert welcome notes if this brain hasn't been seeded; returns how many we added."""
     brain = Brain.query.get(brain_id)
     if not brain or getattr(brain, "seed_nodes_created", False):
         return 0

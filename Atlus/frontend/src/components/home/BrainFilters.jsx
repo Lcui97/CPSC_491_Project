@@ -4,10 +4,9 @@ import BrainCreateModal from './BrainCreateModal';
 import { api } from '../../api/client';
 import { useDeleteBrain, useLeaveBrain } from '../../api/brainQueries';
 
-// Key used to store/retrieve brains from localStorage (persists across refreshes)
 const BRAINS_STORAGE_KEY = 'atlus_brains';
 
-// Fallback brains used the very first time (or if localStorage is empty/broken)
+// Stale demo data if nothing’s in localStorage yet
 const INITIAL_BRAINS = [
   { id: '1', name: 'Notes Brain', badge: 'Notes' },
   { id: '2', name: 'Textbook Brain', badge: 'Textbook' },
@@ -28,18 +27,13 @@ function saveBrainsToStorage(brains) {
 }
 
 export default function BrainFilters({ activeBrainId, onEnterBrain, onCollapseSidebar, onBrainRemoved }) {
-  // List of brain objects displayed in the UI
-  // NOTE: loadBrains() runs immediately here, so this uses whatever is in localStorage
   const [brains, setBrains] = useState(loadBrainsFromStorage());
 
-  // Set of selected brain IDs (used for “filtering” highlight state)
-  // Using a function initializer so it runs only once on mount
   const [selected, setSelected] = useState(() => {
     const b = loadBrainsFromStorage();
     return new Set(b.map((x) => x.id));
   });
 
-  // Holds the brain object we’re currently sharing (or null if not sharing)
   const [shareBrain, setShareBrain] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const deleteBrain = useDeleteBrain();
@@ -66,8 +60,6 @@ export default function BrainFilters({ activeBrainId, onEnterBrain, onCollapseSi
   }, []);
 
   function toggleFilter(id) {
-    // Update selected set immutably:
-    // copy the previous Set, then add/remove the id
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -113,20 +105,16 @@ export default function BrainFilters({ activeBrainId, onEnterBrain, onCollapseSi
   }
 
   function handleShare(e, brain) {
-    // Prevent the click from also triggering parent click handlers (good UX)
     e.stopPropagation();
-    // Open the modal by setting which brain is being shared
     setShareBrain(brain);
   }
 
   return (
     <div className="bg-[rgb(var(--panel))] border border-[rgb(var(--border))] rounded-xl p-4 h-fit">
-      {/* Header row: title + buttons */}
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-medium text-[rgb(var(--text))]">My Brains</h2>
 
         <div className="flex items-center gap-1">
-          {/* Optional collapse button: only rendered if prop is provided */}
           {onCollapseSidebar && (
             <button
               type="button"
@@ -134,7 +122,6 @@ export default function BrainFilters({ activeBrainId, onEnterBrain, onCollapseSi
               className="p-1.5 rounded text-[rgb(var(--muted))] hover:bg-[rgb(var(--panel2))] hover:text-[rgb(var(--text))] transition-colors"
               title="Collapse sidebar"
             >
-              {/* Left chevron icon */}
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 width="14"
@@ -149,7 +136,6 @@ export default function BrainFilters({ activeBrainId, onEnterBrain, onCollapseSi
             </button>
           )}
 
-          {/* Add brain button */}
           <button
             type="button"
             onClick={addBrain}
@@ -161,15 +147,10 @@ export default function BrainFilters({ activeBrainId, onEnterBrain, onCollapseSi
         </div>
       </div>
 
-      {/* Brain list */}
       <ul className="space-y-2">
         {brains.map((brain) => (
           <li
             key={brain.id}
-            // Conditional styling:
-            // 1) activeBrainId => "currently opened" style
-            // 2) selected => "selected filter" style
-            // 3) else => default style
             className={`flex items-center gap-2 p-2 rounded-lg border transition-colors ${
               activeBrainId === brain.id
                 ? 'bg-[rgb(var(--accent))]/30 border-[rgb(var(--accent))] ring-1 ring-[rgb(var(--accent))]'
@@ -178,21 +159,15 @@ export default function BrainFilters({ activeBrainId, onEnterBrain, onCollapseSi
                   : 'bg-[rgb(var(--panel2))] border-[rgb(var(--border))]'
             }`}
           >
-            {/* Main clickable area:
-                - If onEnterBrain is provided, clicking opens the brain
-                - Otherwise, clicking toggles filter selection */}
             <button
               type="button"
               onClick={() => (onEnterBrain ? onEnterBrain(brain) : toggleFilter(brain.id))}
               className="flex-1 min-w-0 text-left"
             >
-              {/* Brain name (truncated so it doesn't overflow) */}
               <p className="text-sm text-[rgb(var(--text))] truncate">{brain.name}</p>
-              {/* Small badge/label underneath */}
               <span className="text-xs text-[rgb(var(--muted))]">{brain.badge}</span>
             </button>
 
-            {/* Share — owners only */}
             {brain.is_owner !== false ? (
               <button
                 type="button"

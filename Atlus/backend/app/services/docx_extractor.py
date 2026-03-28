@@ -1,6 +1,4 @@
-"""
-Extract text from .docx files.
-"""
+"""Word docs → plain text."""
 import io
 
 try:
@@ -10,9 +8,7 @@ except ImportError:
 
 
 def extract_text_from_docx(file_stream) -> str:
-    """
-    Read DOCX from file-like object. Returns full document text.
-    """
+    """Paragraphs + table cells, joined."""
     if Document is None:
         raise RuntimeError("python-docx required for DOCX extraction. pip install python-docx")
 

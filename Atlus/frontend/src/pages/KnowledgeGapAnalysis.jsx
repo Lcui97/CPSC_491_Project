@@ -24,7 +24,6 @@ export default function KnowledgeGapAnalysis() {
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Notes selection placeholder */}
           <div className="bg-[rgb(var(--panel))] border border-[rgb(var(--border))] rounded-xl p-6">
             <h2 className="text-sm font-medium text-[rgb(var(--text))] mb-3">Notes</h2>
             <p className="text-sm text-[rgb(var(--muted))]">
@@ -35,7 +34,6 @@ export default function KnowledgeGapAnalysis() {
             </div>
           </div>
 
-          {/* Textbook selection placeholder */}
           <div className="bg-[rgb(var(--panel))] border border-[rgb(var(--border))] rounded-xl p-6">
             <h2 className="text-sm font-medium text-[rgb(var(--text))] mb-3">Textbook</h2>
             <p className="text-sm text-[rgb(var(--muted))]">

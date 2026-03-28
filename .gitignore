@@ -12,7 +12,7 @@ ehthumbs.db
 *.swo
 *~
 
-# Cursor local agent artifacts
+# Local helper docs (optional; not part of the app)
 Atlus/.agents/
 
 # =============================================================================

@@ -1,14 +1,11 @@
-"""
-Pinecone: store and query embeddings for node linking and similarity search.
-When PINECONE_API_KEY is not set, _index() returns None and upsert/search no-op (run locally).
-"""
+"""Vector index wrapper — if there's no API key, every call is a quiet no-op so dev still works."""
 import os
 from typing import List, Dict, Any
 
 try:
     from pinecone import Pinecone
 except (ImportError, Exception):
-    # Exception: old package "pinecone-client" raises when imported (renamed to "pinecone")
+    # Old pinecone-client package blows up on import; treat as missing
     Pinecone = None
 
 _index_name = None
@@ -36,14 +33,11 @@ def upsert_vectors(
     ids: List[str],
     metadatas: List[Dict[str, Any]],
 ) -> None:
-    """
-    Upsert embedding vectors with metadata (brain_id, section_title, tags, source_reference, etc.).
-    ids and metadatas must match length of vectors.
-    """
+    """Push vectors into this brain's namespace; metadata gets flattened to Pinecone-safe types."""
     index = _index()
     if index is None:
-        return  # local-only: skip Pinecone
-    # Pinecone metadata values must be str | int | float | bool
+        return
+    # Pinecone only likes primitives in metadata
     safe_meta = []
     for m in metadatas:
         safe = {}
@@ -70,10 +64,7 @@ def similarity_search(
     threshold: float = 0.75,
     exclude_ids: List[str] | None = None,
 ) -> List[Dict[str, Any]]:
-    """
-    Query by vector; return matches with score >= threshold, filtered by brain_id.
-    exclude_ids: node ids to exclude (e.g. self). Returns [] when Pinecone not configured.
-    """
+    """Nearest neighbours in this brain's namespace, score-filtered; empty list if Pinecone is off."""
     index = _index()
     if index is None:
         return []
@@ -104,7 +95,7 @@ def similarity_search(
 
 
 def delete_brain_namespace(brain_id: str) -> None:
-    """Remove all vectors for a brain namespace (when deleting a brain)."""
+    """Wipe the whole namespace — used when a brain is deleted."""
     index = _index()
     if index is None:
         return
@@ -122,7 +113,7 @@ def delete_brain_namespace(brain_id: str) -> None:
 
 
 def delete_vectors(brain_id: str, vector_ids: list) -> None:
-    """Remove embeddings for deleted nodes (no-op when Pinecone not configured)."""
+    """Drop specific ids; harmless if we're not wired to Pinecone."""
     index = _index()
     if index is None or not vector_ids:
         return

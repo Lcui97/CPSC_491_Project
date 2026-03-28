@@ -1,4 +1,4 @@
-// Use '' so in dev we hit same origin (Vite proxy forwards /api to backend). Set VITE_API_URL for production.
+// Empty base URL = Vite proxy in dev; set VITE_API_URL when you deploy the API elsewhere.
 const API_URL = import.meta.env.VITE_API_URL ?? '';
 
 export async function checkBackendHealth() {

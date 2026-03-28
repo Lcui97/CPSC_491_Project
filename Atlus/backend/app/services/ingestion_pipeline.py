@@ -1,8 +1,4 @@
-"""
-Orchestrate document ingestion at Brain creation or via /brain/ingest.
-- PDF → extract text → chunk → generate nodes → Pinecone + DB
-- Text/Markdown → chunk (or single) → generate nodes → Pinecone + DB
-"""
+"""Wire up PDF/text uploads: extract, chunk, then node generation + vectors + DB."""
 import io
 import uuid
 from typing import List
@@ -46,23 +42,17 @@ def _ensure_source_file(brain_id: str, filename: str, file_type: str) -> SourceF
         storage_path=None,
     )
     db.session.add(sf)
-    db.session.flush()  # get sf.id
+    db.session.flush()  # need source_files.id for nodes
     return sf
 
 
 def process_creation_files(brain_id: str, user_id: int, files: List) -> dict:
-    """
-    Called when Brain is created with optional files. Process each file and create nodes.
-    """
+    """Same as ingest_documents — used from the “create brain + files” path."""
     return ingest_documents(brain_id, user_id, files)
 
 
 def ingest_documents(brain_id: str, user_id: int, files: List) -> dict:
-    """
-    Ingest a list of Flask FileStorage objects into the given Brain.
-    - PDF/text/md: extract or read → chunk → generate nodes
-    - Image: skip here; client should use /brain/ocr then /brain/generate-nodes with markdown
-    """
+    """Loop uploaded files: PDFs/docs become chunks; raw images get bounced to the OCR flow."""
     try:
         db.session.rollback()
     except Exception:
@@ -81,7 +71,7 @@ def ingest_documents(brain_id: str, user_id: int, files: List) -> dict:
 
         ft = _file_type(ext)
         if ft == "image":
-            # Handwritten: client uses OCR endpoint then generate-nodes with markdown
+            # Photos need /brain/ocr first — we don't guess here
             errors.append(f"Use OCR flow for images: {file.filename}")
             continue
 

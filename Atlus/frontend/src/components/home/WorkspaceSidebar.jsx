@@ -15,6 +15,7 @@ export default function WorkspaceSidebar({
   const isActive = (id) => {
     if (id === 'home') return pathname === '/home';
     if (id === 'notes') return pathname.startsWith('/home/notes');
+    if (id === 'calendar') return pathname.startsWith('/calendar') || pathname.includes('/calendar');
     if (id === 'sources') return pathname.includes('/sources');
     if (id === 'ingest') return pathname === '/ingest';
     return false;
@@ -25,6 +26,7 @@ export default function WorkspaceSidebar({
   const navItems = [
     { id: 'home', label: 'Home', path: '/home' },
     { id: 'notes', label: 'Notes', path: '/home/notes', badge: me?.total_notes ?? 0 },
+    { id: 'calendar', label: 'Calendar', path: '/calendar' },
     {
       id: 'sources',
       label: 'Sources',

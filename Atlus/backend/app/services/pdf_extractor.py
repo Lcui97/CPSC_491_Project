@@ -1,6 +1,4 @@
-"""
-Extract text from PDFs. Uses PyPDF2 for compatibility; can swap to pymupdf for better quality.
-"""
+"""PDF → plain text via PyPDF2 (good enough for class docs)."""
 import io
 
 try:
@@ -10,10 +8,7 @@ except ImportError:
 
 
 def extract_text_from_pdf(file_stream) -> str:
-    """
-    Read PDF from file-like object (e.g. request.files["file"].stream).
-    Returns full document text; chunking is done separately.
-    """
+    """Concatenate all pages from a seekable PDF stream."""
     if PdfReader is None:
         raise RuntimeError("PyPDF2 is required for PDF extraction. pip install PyPDF2")
 

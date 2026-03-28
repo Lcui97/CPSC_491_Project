@@ -1,15 +1,10 @@
-"""
-Brain API: create, ingest documents, OCR, generate nodes.
-- POST /brain/create — create Brain (optional initial documents in same request).
-- POST /brain/ingest — ingest PDF/text/markdown into existing Brain (textbook pipeline).
-- POST /brain/ocr — OCR image(s) and return structured markdown (handwritten notes pipeline).
-- POST /brain/generate-nodes — from text/chunks, generate nodes + embeddings + store.
-"""
+"""Brain routes: workspaces, uploads, OCR, syllabus, calendar, notes, graph, search, ask."""
+
 import os
 import uuid
 import threading
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from io import BytesIO
 from pathlib import Path
 
@@ -22,6 +17,7 @@ from app.models.brain import (
     Brain,
     BrainCollaborator,
     BrainShareLink,
+    CalendarEvent,
     Node,
     NodeRelationship,
     SourceFile,
@@ -44,7 +40,7 @@ def _get_user_or_404():
 
 
 def _brain_for_user(brain_id, user_id):
-    """Brain the user owns or has joined via a share link."""
+    """Return brain if user owns it or is a collaborator."""
     brain = Brain.query.filter_by(id=brain_id).first()
     if not brain:
         return None
@@ -59,11 +55,38 @@ def _upload_root():
     return Path(current_app.root_path).parent / current_app.config.get("UPLOAD_FOLDER", "uploads")
 
 
-# ---------------------------------------------------------------------------
-# POST /brain/create
-# Body: JSON { "name": "...", "badge": "Notes" }
-# Optional: multipart with "files[]" for initial document ingestion at creation time
-# ---------------------------------------------------------------------------
+def _event_to_json(e: CalendarEvent):
+    return {
+        "id": e.id,
+        "brain_id": e.brain_id,
+        "source_file_id": e.source_file_id,
+        "title": e.title,
+        "event_type": e.event_type,
+        "due_at": e.due_at.isoformat() if e.due_at else None,
+        "course_label": e.course_label,
+        "confidence": e.confidence,
+        "notes": e.notes,
+        "created_at": e.created_at.isoformat() if e.created_at else None,
+        "updated_at": e.updated_at.isoformat() if e.updated_at else None,
+    }
+
+
+def _parse_datetime_value(value):
+    if not isinstance(value, str) or not value.strip():
+        return None
+    s = value.strip()
+    if s.endswith("Z"):
+        s = s[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(s)
+    except Exception:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+# Create brain — JSON or multipart; optional files[] ingested right after (SQLite can't background this).
 @bp.route("/brain/create", methods=["POST"])
 @jwt_required()
 def create_brain():
@@ -71,7 +94,7 @@ def create_brain():
     if not user:
         return jsonify({"error": "user not found"}), 404
 
-    # Support both JSON (name only) and multipart (name + files)
+    # JSON body or multipart with files
     if request.is_json:
         data = request.get_json() or {}
         name = (data.get("name") or "").strip() or "New Brain"
@@ -93,8 +116,7 @@ def create_brain():
     except Exception:
         pass
 
-    # If files were provided, run ingestion in background so the request returns immediately.
-    # Read file data now (before response); request stream is invalid after we return.
+    # Buffer uploads before responding — the request body isn't usable after return.
     if files:
         import io
         file_payloads = []
@@ -105,7 +127,7 @@ def create_brain():
                 data = f.read()
                 if not data:
                     continue
-                # Wrapper so ingestion_pipeline can use .filename and .stream
+                # Fake FileStorage shape for the pipeline
                 obj = type("FileLike", (), {"filename": f.filename, "stream": io.BytesIO(data)})()
                 obj.read = lambda d=data: d  # bound copy per file
                 file_payloads.append(obj)
@@ -116,8 +138,7 @@ def create_brain():
             user_id_copy = user.id
             uri = (current_app.config.get("SQLALCHEMY_DATABASE_URI") or "").lower()
             if "sqlite" in uri:
-                # SQLite uses file-level locking; a background thread can cause "database is locked"
-                # Run ingestion in foreground so only one writer at a time.
+                # SQLite + concurrent writers → "database is locked"; ingest inline here.
                 try:
                     from app.services.ingestion_pipeline import process_creation_files
                     process_creation_files(brain_id_copy, user_id_copy, file_payloads)
@@ -146,11 +167,7 @@ def create_brain():
     }), 201
 
 
-# ---------------------------------------------------------------------------
-# POST /brain/ingest
-# Multipart: brain_id (form), files[] (PDF, .txt, .md)
-# Returns immediately; runs extraction + OpenAI + Pinecone in background (can take minutes for large PDFs)
-# ---------------------------------------------------------------------------
+# Ingest files into an existing brain; the heavy lifting runs in a background thread.
 @bp.route("/brain/ingest", methods=["POST"])
 @jwt_required()
 def ingest():
@@ -170,7 +187,7 @@ def ingest():
     if not files:
         return jsonify({"error": "at least one file required"}), 400
 
-    # Read file data before response (request stream invalid after return)
+    # Buffer bytes now — Flask won't let us read the stream after the response goes out
     import io
     file_payloads = []
     for f in files:
@@ -210,12 +227,7 @@ def ingest():
     }), 200
 
 
-# ---------------------------------------------------------------------------
-# POST /brain/ocr
-# Multipart: brain_id (form), file (image or PDF of handwritten notes)
-# Returns: { "markdown": "...", "preview_url": "..." } for split-view display
-# Optionally stores as node after client confirms (or call generate-nodes with markdown)
-# ---------------------------------------------------------------------------
+# OCR upload → markdown for the split editor; images may be saved as a source file.
 @bp.route("/brain/ocr", methods=["POST"])
 @jwt_required()
 def ocr():
@@ -278,9 +290,7 @@ def ocr():
         return jsonify({"error": str(e)}), 500
 
 
-# ---------------------------------------------------------------------------
-# GET /brain/<brain_id>/sources/<source_id>/file — serve uploaded scan (auth)
-# ---------------------------------------------------------------------------
+# Stream an uploaded scan/image (auth + brain access).
 @bp.route("/brain/<brain_id>/sources/<int:source_id>/file", methods=["GET"])
 @jwt_required()
 def serve_source_file(brain_id, source_id):
@@ -299,12 +309,7 @@ def serve_source_file(brain_id, source_id):
     return send_file(path, as_attachment=False, download_name=src.filename or "scan.png")
 
 
-# ---------------------------------------------------------------------------
-# POST /brain/generate-nodes
-# Body: JSON { "brain_id": "...", "chunks": [ { "text", "section_title?", "source_file_id?" } ] }
-# Or for OCR result: { "brain_id": "...", "markdown": "...", "source_file_id?" }
-# Generates nodes via OpenAI, stores embeddings in Pinecone, metadata in Postgres.
-# ---------------------------------------------------------------------------
+# Turn chunks or a single markdown blob into nodes (embeddings + DB rows).
 @bp.route("/brain/generate-nodes", methods=["POST"])
 @jwt_required()
 def generate_nodes():
@@ -344,9 +349,7 @@ def generate_nodes():
         return jsonify({"error": str(e)}), 500
 
 
-# ---------------------------------------------------------------------------
-# GET /brain/list — list brains for current user (for sidebar)
-# ---------------------------------------------------------------------------
+# List brains you own plus any you joined.
 @bp.route("/brain/list", methods=["GET"])
 @jwt_required()
 def list_brains():
@@ -393,9 +396,7 @@ def list_brains():
     }), 200
 
 
-# ---------------------------------------------------------------------------
-# POST /brain/<brain_id>/leave — collaborator removes self (owner cannot "leave")
-# ---------------------------------------------------------------------------
+# Collaborator leaves a shared brain (owners delete instead).
 @bp.route("/brain/<brain_id>/leave", methods=["POST"])
 @jwt_required()
 def leave_brain(brain_id):
@@ -415,9 +416,7 @@ def leave_brain(brain_id):
     return jsonify({"ok": True}), 200
 
 
-# ---------------------------------------------------------------------------
-# DELETE /brain/<brain_id> — owner only; removes nodes, sources, uploads, Pinecone namespace
-# ---------------------------------------------------------------------------
+# Hard delete a brain: DB rows, disk uploads, vector namespace.
 @bp.route("/brain/<brain_id>", methods=["DELETE"])
 @jwt_required()
 def delete_brain(brain_id):
@@ -477,9 +476,7 @@ def delete_brain(brain_id):
     return jsonify({"ok": True, "id": brain_id}), 200
 
 
-# ---------------------------------------------------------------------------
-# POST /brain/<brain_id>/share-link — owner creates invite token
-# ---------------------------------------------------------------------------
+# Owner generates a share token.
 @bp.route("/brain/<brain_id>/share-link", methods=["POST"])
 @jwt_required()
 def create_brain_share_link(brain_id):
@@ -496,9 +493,7 @@ def create_brain_share_link(brain_id):
     return jsonify({"token": token, "share_path": f"/shared/{token}"}), 201
 
 
-# ---------------------------------------------------------------------------
-# GET /share/brain/<token> — public metadata for landing page (no auth)
-# ---------------------------------------------------------------------------
+# Public: brain name/badge for the join landing page.
 @bp.route("/share/brain/<token>", methods=["GET"])
 def public_share_brain_info(token):
     link = BrainShareLink.query.filter_by(token=token).first()
@@ -516,9 +511,7 @@ def public_share_brain_info(token):
     }), 200
 
 
-# ---------------------------------------------------------------------------
-# POST /share/brain/<token>/join — logged-in user joins as collaborator
-# ---------------------------------------------------------------------------
+# Accept invite and add yourself as collaborator.
 @bp.route("/share/brain/<token>/join", methods=["POST"])
 @jwt_required()
 def join_shared_brain(token):
@@ -540,9 +533,7 @@ def join_shared_brain(token):
     return jsonify({"ok": True, "brain_id": brain.id, "role": "collaborator"}), 200
 
 
-# ---------------------------------------------------------------------------
-# GET /brain/<brain_id>/sources — list source files (uploaded docs) for a brain
-# ---------------------------------------------------------------------------
+# Uploaded sources metadata for one brain.
 @bp.route("/brain/<brain_id>/sources", methods=["GET"])
 @jwt_required()
 def get_brain_sources(brain_id):
@@ -567,9 +558,7 @@ def get_brain_sources(brain_id):
     }), 200
 
 
-# ---------------------------------------------------------------------------
-# DELETE /brain/<brain_id>/sources/<source_id> — remove source record; detach nodes (keeps notes)
-# ---------------------------------------------------------------------------
+# Drop a source file; notes stay but lose their source link.
 @bp.route("/brain/<brain_id>/sources/<int:source_id>", methods=["DELETE"])
 @jwt_required()
 def delete_brain_source(brain_id, source_id):
@@ -586,15 +575,240 @@ def delete_brain_source(brain_id, source_id):
         {Node.source_file_id: None},
         synchronize_session=False,
     )
+    CalendarEvent.query.filter(
+        CalendarEvent.brain_id == brain_id,
+        CalendarEvent.source_file_id == source_id,
+    ).update({CalendarEvent.source_file_id: None}, synchronize_session=False)
     db.session.delete(src)
     db.session.commit()
     return jsonify({"ok": True}), 200
 
 
-# ---------------------------------------------------------------------------
-# POST /brain/<brain_id>/ask — prompt LLM with brain context (summarize, study guide, etc.)
-# Body: { "prompt": "...", "mode": "summary" | "study_guide" | "key_points" | "custom" }
-# ---------------------------------------------------------------------------
+# Syllabus file → extracted calendar events (saved immediately).
+@bp.route("/brain/syllabus", methods=["POST"])
+@jwt_required()
+def upload_syllabus():
+    user = _get_user_or_404()
+    if not user:
+        return jsonify({"error": "user not found"}), 404
+    brain_id = request.form.get("brain_id")
+    if not brain_id:
+        return jsonify({"error": "brain_id required"}), 400
+    brain = _brain_for_user(brain_id, user.id)
+    if not brain:
+        return jsonify({"error": "brain not found"}), 404
+    file = request.files.get("file")
+    if not file or not file.filename:
+        return jsonify({"error": "file required"}), 400
+    try:
+        from app.services.syllabus_calendar import syllabus_text_from_file, extract_calendar_events
+
+        data = file.read()
+        if not data:
+            return jsonify({"error": "empty file"}), 400
+        text = syllabus_text_from_file(file.filename, data)
+        if not text.strip():
+            return jsonify({"error": "unable to extract text from syllabus"}), 400
+
+        source_file = SourceFile(
+            brain_id=brain_id,
+            filename=file.filename,
+            file_type="syllabus",
+            storage_path=None,
+        )
+        db.session.add(source_file)
+        db.session.flush()
+
+        extracted = extract_calendar_events(text)
+        saved = []
+        for item in extracted:
+            ev = CalendarEvent(
+                brain_id=brain_id,
+                source_file_id=source_file.id,
+                title=item.get("title") or "Untitled event",
+                event_type=(item.get("event_type") or "other").lower(),
+                due_at=item.get("due_at"),
+                course_label=item.get("course_label"),
+                confidence=item.get("confidence"),
+                notes=item.get("notes"),
+            )
+            db.session.add(ev)
+            saved.append(ev)
+        db.session.commit()
+        return jsonify(
+            {
+                "source_file_id": source_file.id,
+                "events": [_event_to_json(e) for e in saved],
+                "count": len(saved),
+            }
+        ), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+
+# Filter calendar events for one brain (optional date range + type).
+@bp.route("/brain/<brain_id>/calendar-events", methods=["GET"])
+@jwt_required()
+def get_brain_calendar_events(brain_id):
+    user = _get_user_or_404()
+    if not user:
+        return jsonify({"error": "user not found"}), 404
+    brain = _brain_for_user(brain_id, user.id)
+    if not brain:
+        return jsonify({"error": "brain not found"}), 404
+
+    start = _parse_datetime_value(request.args.get("start"))
+    end = _parse_datetime_value(request.args.get("end"))
+    event_type = (request.args.get("type") or "").strip().lower()
+
+    q = CalendarEvent.query.filter_by(brain_id=brain_id)
+    if start:
+        q = q.filter(CalendarEvent.due_at >= start)
+    if end:
+        q = q.filter(CalendarEvent.due_at <= end)
+    if event_type:
+        q = q.filter(CalendarEvent.event_type == event_type)
+    events = q.order_by(CalendarEvent.due_at.asc()).all()
+    return jsonify({"events": [_event_to_json(e) for e in events]}), 200
+
+
+# Add a calendar row by hand.
+@bp.route("/brain/<brain_id>/calendar-events", methods=["POST"])
+@jwt_required()
+def create_brain_calendar_event(brain_id):
+    user = _get_user_or_404()
+    if not user:
+        return jsonify({"error": "user not found"}), 404
+    brain = _brain_for_user(brain_id, user.id)
+    if not brain:
+        return jsonify({"error": "brain not found"}), 404
+    data = request.get_json() or {}
+    title = (data.get("title") or "").strip()[:512]
+    if not title:
+        return jsonify({"error": "title required"}), 400
+    due_at = _parse_datetime_value(data.get("due_at"))
+    if not due_at:
+        return jsonify({"error": "valid due_at required"}), 400
+    event_type = (data.get("event_type") or "other").strip().lower()
+    if event_type not in {"quiz", "midterm", "test", "project", "assignment", "final", "other"}:
+        event_type = "other"
+    ev = CalendarEvent(
+        brain_id=brain_id,
+        title=title,
+        event_type=event_type,
+        due_at=due_at,
+        course_label=(data.get("course_label") or "").strip()[:128] or None,
+        confidence=data.get("confidence"),
+        notes=(data.get("notes") or "").strip() or None,
+    )
+    db.session.add(ev)
+    db.session.commit()
+    return jsonify(_event_to_json(ev)), 201
+
+
+# Patch an existing event.
+@bp.route("/brain/<brain_id>/calendar-events/<int:event_id>", methods=["PUT"])
+@jwt_required()
+def update_brain_calendar_event(brain_id, event_id):
+    user = _get_user_or_404()
+    if not user:
+        return jsonify({"error": "user not found"}), 404
+    brain = _brain_for_user(brain_id, user.id)
+    if not brain:
+        return jsonify({"error": "brain not found"}), 404
+    ev = CalendarEvent.query.filter_by(id=event_id, brain_id=brain_id).first()
+    if not ev:
+        return jsonify({"error": "event not found"}), 404
+    data = request.get_json() or {}
+    if "title" in data:
+        title = (data.get("title") or "").strip()[:512]
+        if not title:
+            return jsonify({"error": "title cannot be empty"}), 400
+        ev.title = title
+    if "event_type" in data:
+        event_type = (data.get("event_type") or "other").strip().lower()
+        if event_type not in {"quiz", "midterm", "test", "project", "assignment", "final", "other"}:
+            event_type = "other"
+        ev.event_type = event_type
+    if "due_at" in data:
+        due_at = _parse_datetime_value(data.get("due_at"))
+        if not due_at:
+            return jsonify({"error": "valid due_at required"}), 400
+        ev.due_at = due_at
+    if "course_label" in data:
+        ev.course_label = (data.get("course_label") or "").strip()[:128] or None
+    if "confidence" in data:
+        conf = data.get("confidence")
+        try:
+            ev.confidence = float(conf) if conf is not None else None
+        except Exception:
+            ev.confidence = None
+    if "notes" in data:
+        ev.notes = (data.get("notes") or "").strip() or None
+    ev.updated_at = datetime.now(timezone.utc)
+    db.session.commit()
+    return jsonify(_event_to_json(ev)), 200
+
+
+# Remove one event.
+@bp.route("/brain/<brain_id>/calendar-events/<int:event_id>", methods=["DELETE"])
+@jwt_required()
+def delete_brain_calendar_event(brain_id, event_id):
+    user = _get_user_or_404()
+    if not user:
+        return jsonify({"error": "user not found"}), 404
+    brain = _brain_for_user(brain_id, user.id)
+    if not brain:
+        return jsonify({"error": "brain not found"}), 404
+    ev = CalendarEvent.query.filter_by(id=event_id, brain_id=brain_id).first()
+    if not ev:
+        return jsonify({"error": "event not found"}), 404
+    db.session.delete(ev)
+    db.session.commit()
+    return jsonify({"ok": True, "id": event_id}), 200
+
+
+# All upcoming deadlines across brains you can see.
+@bp.route("/calendar-events", methods=["GET"])
+@jwt_required()
+def get_global_calendar_events():
+    user = _get_user_or_404()
+    if not user:
+        return jsonify({"error": "user not found"}), 404
+    owned = Brain.query.filter_by(user_id=user.id).all()
+    collab_ids = [r[0] for r in db.session.query(BrainCollaborator.brain_id).filter_by(user_id=user.id).all()]
+    brain_ids = list({*(b.id for b in owned), *collab_ids})
+    if not brain_ids:
+        return jsonify({"events": []}), 200
+
+    start = _parse_datetime_value(request.args.get("start"))
+    end = _parse_datetime_value(request.args.get("end"))
+    event_type = (request.args.get("type") or "").strip().lower()
+    brain_name_map = {b.id: b.name for b in Brain.query.filter(Brain.id.in_(brain_ids)).all()}
+
+    q = CalendarEvent.query.filter(CalendarEvent.brain_id.in_(brain_ids))
+    if start:
+        q = q.filter(CalendarEvent.due_at >= start)
+    if end:
+        q = q.filter(CalendarEvent.due_at <= end)
+    if event_type:
+        q = q.filter(CalendarEvent.event_type == event_type)
+    rows = q.order_by(CalendarEvent.due_at.asc()).all()
+    return jsonify(
+        {
+            "events": [
+                {
+                    **_event_to_json(e),
+                    "brain_name": brain_name_map.get(e.brain_id, ""),
+                }
+                for e in rows
+            ]
+        }
+    ), 200
+
+
+# Ask the model with note + calendar context (modes, time windows, etc.).
 @bp.route("/brain/<brain_id>/ask", methods=["POST"])
 @jwt_required()
 def ask_brain_route(brain_id):
@@ -608,10 +822,26 @@ def ask_brain_route(brain_id):
     data = request.get_json() or {}
     prompt = (data.get("prompt") or "").strip()
     mode = (data.get("mode") or "summary").strip().lower()
+    time_scope = (data.get("time_scope") or "").strip().lower()
+    response_intent = (data.get("response_intent") or "").strip().lower()
+    try:
+        upcoming_days = max(1, min(90, int(data.get("upcoming_days") or 21)))
+    except Exception:
+        upcoming_days = 21
     if mode not in ("summary", "study_guide", "key_points", "custom"):
         mode = "custom"
 
-    nodes = Node.query.filter_by(brain_id=brain_id).order_by(Node.updated_at.desc().nullslast(), Node.created_at.desc()).limit(100).all()
+    nodes_query = Node.query.filter_by(brain_id=brain_id)
+    if time_scope == "last_2_weeks":
+        since = datetime.now(timezone.utc) - timedelta(days=14)
+        nodes_query = nodes_query.filter(
+            (Node.updated_at >= since) | (Node.created_at >= since)
+        )
+    nodes = (
+        nodes_query.order_by(Node.updated_at.desc().nullslast(), Node.created_at.desc())
+        .limit(100)
+        .all()
+    )
     context_parts = []
     for n in nodes:
         content = n.markdown_content or n.raw_content or ""
@@ -620,20 +850,47 @@ def ask_brain_route(brain_id):
             context_parts.append(f"## {title}\n\n{content[:8000]}")
     context_text = "\n\n---\n\n".join(context_parts) if context_parts else ""
 
-    if not context_text.strip():
+    event_query = CalendarEvent.query.filter_by(brain_id=brain_id)
+    now_utc = datetime.now(timezone.utc)
+    if response_intent == "study_for_upcoming":
+        event_query = event_query.filter(CalendarEvent.due_at >= now_utc)
+        event_query = event_query.filter(CalendarEvent.due_at <= now_utc + timedelta(days=upcoming_days))
+    elif time_scope == "last_2_weeks":
+        event_query = event_query.filter(CalendarEvent.due_at >= now_utc - timedelta(days=14))
+        event_query = event_query.filter(CalendarEvent.due_at <= now_utc)
+    events = event_query.order_by(CalendarEvent.due_at.asc()).limit(60).all()
+    event_lines = []
+    for e in events:
+        when = e.due_at.isoformat() if e.due_at else "unknown"
+        event_lines.append(
+            f"- [{e.event_type}] {e.title} @ {when}"
+            + (f" ({e.course_label})" if e.course_label else "")
+        )
+    event_context = "\n".join(event_lines)
+
+    if not context_text.strip() and not event_context.strip():
         return jsonify({"response": "Add some notes or upload documents to this brain first, then ask for a summary or study guide."}), 200
 
     try:
         from app.services.openai_service import ask_brain as llm_ask_brain
-        response_text = llm_ask_brain(context_text, prompt or "Summarize the above.", mode)
+        full_context = context_text
+        if event_context.strip():
+            full_context = (
+                f"{context_text}\n\n---\n\n## Calendar Events\n\n{event_context}"
+                if context_text.strip()
+                else f"## Calendar Events\n\n{event_context}"
+            )
+        if response_intent == "study_for_upcoming" and not prompt:
+            prompt = "Help me study for my upcoming assessments based on the notes and calendar."
+        elif time_scope == "last_2_weeks" and not prompt:
+            prompt = "Summarize my notes and key deadlines from the last two weeks."
+        response_text = llm_ask_brain(full_context, prompt or "Summarize the above.", mode)
         return jsonify({"response": response_text}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
-# ---------------------------------------------------------------------------
-# GET /brain/search?q=... — search nodes across all user's brains (title, summary, raw_content)
-# ---------------------------------------------------------------------------
+# Simple ILIKE search across your notes.
 @bp.route("/brain/search", methods=["GET"])
 @jwt_required()
 def search():
@@ -679,10 +936,7 @@ def search():
     }), 200
 
 
-# ---------------------------------------------------------------------------
-# GET /brain/<brain_id>/nodes — list nodes (paginated, search, sort, tag filter)
-# Query: page=1, per_page=50, q=search, sort=recent|alpha, tag=foo
-# ---------------------------------------------------------------------------
+# Paginated note list with optional search/sort/tag.
 @bp.route("/brain/<brain_id>/nodes", methods=["GET"])
 @jwt_required()
 def get_brain_nodes(brain_id):
@@ -731,10 +985,7 @@ def get_brain_nodes(brain_id):
     }), 200
 
 
-# ---------------------------------------------------------------------------
-# POST /brain/<brain_id>/nodes — create a new node (note)
-# Body: { "title": "Untitled", "markdown_content": "...", "tags": [], "node_type": "note" }
-# ---------------------------------------------------------------------------
+# Create a new note in this brain.
 @bp.route("/brain/<brain_id>/nodes", methods=["POST"])
 @jwt_required()
 def create_node(brain_id):
@@ -794,9 +1045,7 @@ def _node_for_user(node_id, user_id):
     return node if brain else None
 
 
-# ---------------------------------------------------------------------------
-# GET /nodes/<node_id> — single node
-# ---------------------------------------------------------------------------
+# Fetch one note.
 @bp.route("/nodes/<node_id>", methods=["GET"])
 @jwt_required()
 def get_node(node_id):
@@ -809,9 +1058,7 @@ def get_node(node_id):
     return jsonify(_node_to_json(node)), 200
 
 
-# ---------------------------------------------------------------------------
-# PUT /nodes/<node_id> — update title, markdown_content, tags
-# ---------------------------------------------------------------------------
+# Save edits to a note.
 @bp.route("/nodes/<node_id>", methods=["PUT"])
 @jwt_required()
 def update_node(node_id):
@@ -844,9 +1091,7 @@ def update_node(node_id):
     return jsonify(_node_to_json(node)), 200
 
 
-# ---------------------------------------------------------------------------
-# DELETE /nodes/<node_id> — delete note and clean up edges / vectors
-# ---------------------------------------------------------------------------
+# Delete note, strip graph edges, drop vectors.
 @bp.route("/nodes/<node_id>", methods=["DELETE"])
 @jwt_required()
 def delete_node(node_id):
@@ -882,9 +1127,7 @@ def delete_node(node_id):
     return jsonify({"ok": True, "id": node_id, "brain_id": brain_id}), 200
 
 
-# ---------------------------------------------------------------------------
-# GET /nodes/<node_id>/backlinks — nodes that link TO this node (reverse edges)
-# ---------------------------------------------------------------------------
+# Who points at this note (reverse relationships).
 @bp.route("/nodes/<node_id>/backlinks", methods=["GET"])
 @jwt_required()
 def get_backlinks(node_id):
@@ -907,9 +1150,7 @@ def get_backlinks(node_id):
     }), 200
 
 
-# ---------------------------------------------------------------------------
-# GET /nodes/<node_id>/related — graph neighbors + optional Pinecone semantic neighbors
-# ---------------------------------------------------------------------------
+# Related notes: explicit graph, stored similar-ids, then vector search if available.
 @bp.route("/nodes/<node_id>/related", methods=["GET"])
 @jwt_required()
 def get_related(node_id):
@@ -979,9 +1220,7 @@ def get_related(node_id):
     return jsonify({"related": related}), 200
 
 
-# ---------------------------------------------------------------------------
-# GET /brain/<brain_id>/graph — nodes + edges for graph view (one shot, cache on client)
-# ---------------------------------------------------------------------------
+# Full graph payload for one brain (client can cache).
 @bp.route("/brain/<brain_id>/graph", methods=["GET"])
 @jwt_required()
 def get_brain_graph(brain_id):
@@ -1017,9 +1256,7 @@ def get_brain_graph(brain_id):
     return jsonify({"nodes": node_list, "edges": edge_list}), 200
 
 
-# ---------------------------------------------------------------------------
-# GET /graph/global — nodes + edges from ALL user brains (for Global Graph mode)
-# ---------------------------------------------------------------------------
+# Merged graph across every owned brain, with hub nodes per workspace.
 @bp.route("/graph/global", methods=["GET"])
 @jwt_required()
 def get_global_graph():
@@ -1065,7 +1302,7 @@ def get_global_graph():
                 ):
                     edge_list.append({"source": n.id, "target": target_id, "type": "related", "weight": None})
 
-    # One hub node per brain: shows all workspaces and links brains that share tags
+    # Synthetic hub per brain + weak edges when tags overlap
     tag_sets = defaultdict(set)
     for n in nodes:
         tags = n.tags if n.tags is not None else (n.concepts or [])
@@ -1107,7 +1344,7 @@ def get_global_graph():
                 }
             )
 
-    # Pull each note toward its brain hub (same layout idea as single-brain graph)
+    # Tie notes to their hub so the layout clusters per workspace
     if nodes and len(nodes) <= 400:
         for n in nodes:
             edge_list.append(

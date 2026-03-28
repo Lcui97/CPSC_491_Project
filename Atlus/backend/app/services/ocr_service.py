@@ -1,11 +1,4 @@
-"""
-OCR for handwritten notes.
-
-Primary path (best accuracy): OpenAI vision (gpt-4o by default) reads the page image and
-outputs structured Markdown directly.
-
-Fallback: EasyOCR → generate_markdown_structure (when API key missing or vision fails).
-"""
+"""Handwriting → markdown: try vision first, fall back to EasyOCR + a cheap structuring pass."""
 import io
 import logging
 from typing import List
@@ -36,7 +29,7 @@ def _get_reader(lang: List[str] = None):
 
 
 def _image_to_text_easyocr(image_bytes: bytes) -> str:
-    """Legacy OCR on image bytes; return raw text."""
+    """EasyOCR path — plain text, no LLM."""
     reader = _get_reader()
     import numpy as np
     from PIL import Image
@@ -53,7 +46,7 @@ def _image_to_text_easyocr(image_bytes: bytes) -> str:
 
 
 def _pdf_pages_to_images(pdf_bytes: bytes) -> List[bytes]:
-    """Convert first few PDF pages to image bytes for OCR (e.g. scanned PDF)."""
+    """Placeholder for rasterizing PDF pages (scanned syllabi, etc.)."""
     try:
         from PyPDF2 import PdfReader
     except Exception:
@@ -62,7 +55,7 @@ def _pdf_pages_to_images(pdf_bytes: bytes) -> List[bytes]:
 
 
 def _image_ocr_markdown(image_bytes: bytes, filename: str) -> dict:
-    """Run best-available OCR for a raster image; returns same shape as run_ocr_to_markdown."""
+    """Try vision first, then EasyOCR + markdown cleanup — same payload shape as the public entrypoint."""
     if _has_openai():
         try:
             markdown, raw_preview = handwriting_image_to_markdown(image_bytes, filename)
@@ -98,10 +91,7 @@ def _image_ocr_markdown(image_bytes: bytes, filename: str) -> dict:
 
 
 def run_ocr_to_markdown(file) -> dict:
-    """
-    file: Flask FileStorage (image or PDF).
-    Returns: { "markdown", "raw_text", "preview_url", optional "ocr_engine" }
-    """
+    """Image or PDF upload → markdown + preview fields for the client."""
     try:
         filename = (file.filename or "").lower()
         data = file.read()

@@ -13,7 +13,7 @@ export default function BrainCreateModal({ onClose, onCreated }) {
   const [dragActive, setDragActive] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState(null);
-  const [step, setStep] = useState('form'); // 'form' | 'handwritten' | 'done'
+  const [step, setStep] = useState('form');
   const [createdBrain, setCreatedBrain] = useState(null);
   const [pendingImages, setPendingImages] = useState([]);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);

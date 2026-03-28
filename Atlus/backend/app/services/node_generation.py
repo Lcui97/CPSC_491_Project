@@ -1,6 +1,4 @@
-"""
-Generate nodes from chunks or markdown: OpenAI → Pinecone → Postgres, then link by similarity.
-"""
+"""Chunk or markdown in, nodes + vectors + auto-links out."""
 import uuid
 from typing import List, Dict, Any
 
@@ -19,7 +17,7 @@ LINK_THRESHOLD = 0.78
 
 
 def _chunk_to_node_payload(chunk: Chunk) -> Dict[str, Any]:
-    """Call OpenAI to get title, summary, concepts, related_topics for one chunk."""
+    """LLM pass to title/summarize/tag one chunk."""
     out = generate_node_from_chunk(chunk.text, chunk.section_title)
     return {
         "title": out.get("title") or chunk.section_title or "Untitled",
@@ -32,8 +30,7 @@ def _chunk_to_node_payload(chunk: Chunk) -> Dict[str, Any]:
 
 
 def _markdown_to_single_node(markdown: str, source_file_id: int | None) -> Dict[str, Any]:
-    """Treat full markdown as one node; generate title/summary/concepts via OpenAI."""
-    # Use first 6k chars for generation
+    """OCR-style blob: one note, same LLM metadata pass (trimmed for token budget)."""
     out = generate_node_from_chunk(markdown[:6000])
     return {
         "title": out.get("title") or "Handwritten note",
@@ -54,16 +51,9 @@ def generate_and_store_nodes(
     source_file_id: int | None = None,
     node_type: str | None = None,
 ) -> dict:
-    """
-    chunks: list of { "text", "section_title?", "source_file_id?" } (from textbook pipeline).
-    markdown: single document (e.g. from OCR); creates one node.
-    - Generate node payloads via OpenAI
-    - Create embeddings, upsert to Pinecone
-    - Insert Node rows in Postgres with embedding_id
-    - Run similarity search per node and create relationships (related_node_ids + NodeRelationship if used)
-    """
+    """Either many chunks from a textbook upload, or one markdown string from OCR — then vectors + DB + auto-links."""
     if chunks:
-        # Textbook path: multiple chunks
+        # Textbook / multi-chunk path
         payloads = []
         for c in chunks:
             chunk_obj = Chunk(
@@ -78,7 +68,7 @@ def generate_and_store_nodes(
     else:
         return {"nodes_created": 0, "node_ids": [], "links_created": 0}
 
-    # Embedding text: title + summary + key concepts
+    # Build one string per node for the embedding model
     texts_for_embedding = []
     for p in payloads:
         t = f"{p['title']}\n{p['summary']}\n" + " ".join((p.get("concepts") or [])[:10])
@@ -101,7 +91,7 @@ def generate_and_store_nodes(
 
     upsert_vectors(brain_id, embeddings, node_ids, metadatas)
 
-    # Persist nodes in Postgres
+    # Write rows
     for i, p in enumerate(payloads):
         raw = payloads[i].get("raw_content") or ""
         node = Node(
@@ -126,7 +116,7 @@ def generate_and_store_nodes(
         db.session.add(node)
     db.session.commit()
 
-    # Link nodes by similarity
+    # Stitch related_node_ids from near neighbours
     links_created = 0
     for i, node_id in enumerate(node_ids):
         emb = embeddings[i]
@@ -150,11 +140,7 @@ def generate_and_store_nodes(
 
 
 def relink_user_note(node_id: str, brain_id: str) -> None:
-    """
-    Embed a user-written note (create/update) and refresh related_node_ids via Pinecone similarity.
-    Ingested chunks already get links inside generate_and_store_nodes; this covers manual notes.
-    Requires OPENAI_API_KEY + PINECONE for meaningful matches; fails soft if unavailable.
-    """
+    """Re-embed after a manual save and refresh `related_node_ids` (no-op if APIs missing)."""
     node = Node.query.get(node_id)
     if not node or node.brain_id != brain_id:
         return

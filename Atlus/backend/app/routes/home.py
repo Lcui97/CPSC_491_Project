@@ -8,7 +8,7 @@ from app.models.brain import Brain, BrainCollaborator, Node
 
 bp = Blueprint("home", __name__)
 
-# Node types counted as "notes" for account stats (exclude seed/system)
+# Don't count onboarding / system nodes toward “how many notes”
 NOTE_TYPES = ("note", "handwritten", "textbook_section")
 
 
@@ -58,7 +58,7 @@ def me_summary():
 @bp.route("/me/activity", methods=["GET"])
 @jwt_required()
 def me_activity():
-    """Recent notes across all of the user's brains (for dashboard activity feed)."""
+    """Latest edits across brains you can access — little activity strip on home."""
     user_id = get_jwt_identity()
     try:
         user_id = int(user_id)
@@ -105,7 +105,7 @@ def me_activity():
 @bp.route("/me/notes", methods=["GET"])
 @jwt_required()
 def me_notes():
-    """Paginated notes across all of the user's brains (gallery / global list)."""
+    """All-notes gallery with paging + search."""
     user_id = get_jwt_identity()
     try:
         user_id = int(user_id)

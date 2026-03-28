@@ -1,6 +1,4 @@
-"""
-Intelligent chunking of textbook/content: prefer splitting by section headers when possible.
-"""
+"""Split long readings on headings when we can; otherwise chop by size with a little overlap."""
 import re
 from dataclasses import dataclass
 from typing import List
@@ -14,7 +12,7 @@ class Chunk:
     end_page: int | None = None
 
 
-# Common patterns for section headers (numbered sections, chapter titles, etc.)
+# Heuristics for “this line looks like a section title”
 SECTION_PATTERNS = [
     re.compile(r"^(?:Chapter\s+\d+[.:]?\s*)(.+)$", re.IGNORECASE),
     re.compile(r"^(\d+\.\d*)\s+(.+)$"),  # 1.2 Section Name
@@ -35,10 +33,7 @@ def _is_likely_header(line: str) -> bool:
 
 
 def chunk_by_sections(text: str, max_chunk_chars: int = 2000, overlap: int = 100) -> List[Chunk]:
-    """
-    Split text by section headers when possible; otherwise by size with overlap.
-    Returns list of Chunk with optional section_title.
-    """
+    """Prefer breaks at headers; fall back to fixed-size slices with trailing overlap for context."""
     if not text or not text.strip():
         return []
 
@@ -56,7 +51,7 @@ def chunk_by_sections(text: str, max_chunk_chars: int = 2000, overlap: int = 100
             continue
 
         if _is_likely_header(line_stripped) and (not current_text or current_len > 300):
-            # Flush current chunk if we have content
+            # Start a new section — emit what we had
             if current_text:
                 chunk_text = "\n".join(current_text).strip()
                 if chunk_text:
@@ -75,7 +70,7 @@ def chunk_by_sections(text: str, max_chunk_chars: int = 2000, overlap: int = 100
             chunk_text = "\n".join(current_text).strip()
             if chunk_text:
                 chunks.append(Chunk(text=chunk_text, section_title=current_section))
-            # Keep overlap: last N chars for context
+            # Carry a tail of the old chunk into the next one
             overlap_lines = []
             overlap_len = 0
             for i in range(len(current_text) - 1, -1, -1):

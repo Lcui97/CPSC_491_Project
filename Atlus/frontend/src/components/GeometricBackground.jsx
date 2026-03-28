@@ -1,10 +1,8 @@
 export default function GeometricBackground({ children, className = '' }) {
   return (
     <div className={`relative min-h-screen overflow-hidden ${className}`}>
-      {/* Base light beige background */}
       <div className="absolute inset-0 bg-[#E7E7E8]" />
 
-      {/* Grid pattern - top-left */}
       <svg
         className="absolute top-8 left-8 w-24 h-24 opacity-40"
         viewBox="0 0 100 100"
@@ -39,7 +37,6 @@ export default function GeometricBackground({ children, className = '' }) {
         />
       </svg>
 
-      {/* Dark charcoal polygon - bottom-right */}
       <svg
         className="absolute bottom-0 right-0 w-[50%] h-[50%] min-w-[300px] min-h-[300px]"
         viewBox="0 0 400 400"
@@ -51,7 +48,6 @@ export default function GeometricBackground({ children, className = '' }) {
         />
       </svg>
 
-      {/* Orbital curves - overlay (white lines per design) */}
       <svg
         className="absolute top-1/2 right-[30%] w-[40%] h-[50%] -translate-y-1/2 opacity-60"
         viewBox="0 0 200 200"
@@ -64,7 +60,6 @@ export default function GeometricBackground({ children, className = '' }) {
         <path d="M 20 100 Q 100 40 180 100 T 20 100" strokeDasharray="2 2" />
       </svg>
 
-      {/* Content */}
       <div className="relative z-10">{children}</div>
     </div>
   );

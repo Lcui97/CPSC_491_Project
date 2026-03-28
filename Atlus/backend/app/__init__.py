@@ -4,15 +4,12 @@ from app.extensions import cors, db, jwt
 
 
 def _jwt_error_response(message, status=401):
-    """Return JSON error for JWT failures so frontend can show a clear message."""
+    """JWT errors as JSON so the UI can show a friendly string."""
     return jsonify({"error": message}), status
 
 
 def _apply_sqlite_compat_migrations(app):
-    """
-    Keep local SQLite schema compatible with evolving models.
-    create_all() creates missing tables but does not add new columns to existing tables.
-    """
+    """SQLite-only: add columns we added to models after the DB already existed (create_all won't)."""
     uri = app.config.get("SQLALCHEMY_DATABASE_URI", "")
     if not str(uri).startswith("sqlite"):
         return
@@ -31,9 +28,34 @@ def _apply_sqlite_compat_migrations(app):
             "edge_type": "VARCHAR(64)",
             "weight": "FLOAT",
         },
+        "calendar_events": {
+            "course_label": "VARCHAR(128)",
+            "confidence": "FLOAT",
+            "notes": "TEXT",
+            "updated_at": "DATETIME",
+        },
     }
 
     with db.engine.begin() as conn:
+        conn.exec_driver_sql(
+            """
+            CREATE TABLE IF NOT EXISTS calendar_events (
+                id INTEGER PRIMARY KEY,
+                brain_id VARCHAR(64) NOT NULL,
+                source_file_id INTEGER,
+                title VARCHAR(512) NOT NULL,
+                event_type VARCHAR(32) NOT NULL DEFAULT 'other',
+                due_at DATETIME NOT NULL,
+                course_label VARCHAR(128),
+                confidence FLOAT,
+                notes TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(brain_id) REFERENCES brains(id),
+                FOREIGN KEY(source_file_id) REFERENCES source_files(id)
+            )
+            """
+        )
         for table, cols in desired.items():
             existing = {
                 row[1]

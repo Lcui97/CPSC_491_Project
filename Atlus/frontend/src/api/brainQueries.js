@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from './client';
+import { api, apiUpload } from './client';
 
 export const brainKeys = {
   list: () => ['brains'],
@@ -9,6 +9,8 @@ export const brainKeys = {
   meActivity: (limit) => ['me', 'activity', limit],
   meNotes: (params) => ['me', 'notes', params],
   sources: (brainId) => ['brains', brainId, 'sources'],
+  calendarByBrain: (brainId, params) => ['brains', brainId, 'calendar-events', params],
+  calendarGlobal: (params) => ['calendar-events', params],
 };
 
 export function useBrains() {
@@ -173,6 +175,82 @@ export function useBrainAsk(brainId) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: brainKeys.sources(brainId) });
       queryClient.invalidateQueries({ queryKey: brainKeys.nodes(brainId, {}) });
+    },
+  });
+}
+
+export function useBrainCalendarEvents(brainId, params = {}) {
+  const { start = '', end = '', type = '' } = params;
+  return useQuery({
+    queryKey: brainKeys.calendarByBrain(brainId, { start, end, type }),
+    queryFn: () => {
+      const search = new URLSearchParams();
+      if (start) search.set('start', start);
+      if (end) search.set('end', end);
+      if (type) search.set('type', type);
+      return api(`/api/brain/${brainId}/calendar-events${search.toString() ? `?${search}` : ''}`).then((r) => r.events || []);
+    },
+    enabled: !!brainId,
+  });
+}
+
+export function useGlobalCalendarEvents(params = {}) {
+  const { start = '', end = '', type = '' } = params;
+  return useQuery({
+    queryKey: brainKeys.calendarGlobal({ start, end, type }),
+    queryFn: () => {
+      const search = new URLSearchParams();
+      if (start) search.set('start', start);
+      if (end) search.set('end', end);
+      if (type) search.set('type', type);
+      return api(`/api/calendar-events${search.toString() ? `?${search}` : ''}`).then((r) => r.events || []);
+    },
+  });
+}
+
+export function useCreateCalendarEvent(brainId) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body) => api(`/api/brain/${brainId}/calendar-events`, { method: 'POST', body: JSON.stringify(body) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['brains', brainId, 'calendar-events'] });
+      queryClient.invalidateQueries({ queryKey: ['calendar-events'] });
+    },
+  });
+}
+
+export function useUpdateCalendarEvent(brainId) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ eventId, body }) => api(`/api/brain/${brainId}/calendar-events/${eventId}`, { method: 'PUT', body: JSON.stringify(body) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['brains', brainId, 'calendar-events'] });
+      queryClient.invalidateQueries({ queryKey: ['calendar-events'] });
+    },
+  });
+}
+
+export function useDeleteCalendarEvent(brainId) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (eventId) => api(`/api/brain/${brainId}/calendar-events/${eventId}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['brains', brainId, 'calendar-events'] });
+      queryClient.invalidateQueries({ queryKey: ['calendar-events'] });
+    },
+  });
+}
+
+export function useUploadSyllabus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ brainId, file }) => apiUpload('/api/brain/syllabus', { brain_id: brainId }, file),
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['brains', vars?.brainId, 'calendar-events'] });
+      queryClient.invalidateQueries({ queryKey: ['calendar-events'] });
+      if (vars?.brainId) {
+        queryClient.invalidateQueries({ queryKey: brainKeys.sources(vars.brainId) });
+      }
     },
   });
 }

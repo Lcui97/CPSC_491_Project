@@ -1,9 +1,4 @@
-/**
- * Split layout for handwritten notes:
- * - Left: original scanned note preview (image URL or file)
- * - Right: automatically generated Markdown version (from OCR pipeline)
- * Use when displaying OCR result or when adding a handwritten note to a Brain.
- */
+/** After OCR: image (or object URL) on the left, editable markdown on the right. */
 export default function HandwrittenNotesSplitView({
   imageUrl,
   imageFile,

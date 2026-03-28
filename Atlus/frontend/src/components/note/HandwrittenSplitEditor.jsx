@@ -2,9 +2,7 @@ import { useEffect, useState } from 'react';
 
 const API_URL = import.meta.env.VITE_API_URL ?? '';
 
-/**
- * Original scan on the left, markdown editor on the right (authenticated image fetch).
- */
+/** Loads the scan with the user’s token and wraps the markdown editor beside it. */
 export default function HandwrittenSplitEditor({ brainId, sourceFileId, filename, children }) {
   const [url, setUrl] = useState(null);
   const [err, setErr] = useState(null);

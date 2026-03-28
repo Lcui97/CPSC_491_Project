@@ -1,7 +1,4 @@
-"""
-OpenAI: embeddings and node generation (summaries, concepts, relationships).
-When OPENAI_API_KEY is not set, runs in local-only mode: stub embeddings, simple text extraction for nodes.
-"""
+"""Embeddings + LLM helpers for nodes and chat. Without an API key we fake vectors and keep things runnable."""
 import base64
 import io
 import os
@@ -15,7 +12,7 @@ except ImportError:
     OpenAI = None
 
 _client = None
-# Stub embedding dimension (text-embedding-3-small); used when OpenAI is not configured
+# Matches text-embedding-3-small — zero vector when we're stubbing
 EMBEDDING_DIM = 1536
 
 
@@ -37,7 +34,7 @@ def _get_client():
 
 
 def get_embedding(text: str, model: str = "text-embedding-3-small") -> List[float]:
-    """Return embedding vector for a single text. Stub (zeros) when OpenAI not configured."""
+    """One embedding; all zeros if we're not calling the API."""
     if not _has_openai():
         return [0.0] * EMBEDDING_DIM
     client = _get_client()
@@ -46,7 +43,7 @@ def get_embedding(text: str, model: str = "text-embedding-3-small") -> List[floa
 
 
 def get_embeddings_batch(texts: List[str], model: str = "text-embedding-3-small") -> List[List[float]]:
-    """Return embedding vectors for multiple texts. Stubs when OpenAI not configured."""
+    """Batch version of get_embedding; stubbed zeros if no key."""
     if not texts:
         return []
     if not _has_openai():
@@ -67,7 +64,7 @@ Output only valid JSON, no markdown code fence."""
 
 
 def _local_node_from_chunk(chunk_text: str, section_title: str | None = None) -> Dict[str, Any]:
-    """Local-only: derive title and summary from text without OpenAI."""
+    """Offline fallback: first line-ish title + blurb, no LLM."""
     text = (chunk_text or "").strip()[:8000]
     lines = [l.strip() for l in text.split("\n") if l.strip()]
     title = section_title or (lines[0][:200] if lines else "Untitled")
@@ -81,10 +78,7 @@ def _local_node_from_chunk(chunk_text: str, section_title: str | None = None) ->
 
 
 def generate_node_from_chunk(chunk_text: str, section_title: str | None = None) -> Dict[str, Any]:
-    """
-    Call ChatGPT to produce structured node fields from one chunk.
-    When OpenAI is not configured, returns simple title/summary from text (local-only).
-    """
+    """JSON shape for one chunk from the small model, or _local_node_from_chunk if we're offline."""
     if not _has_openai():
         return _local_node_from_chunk(chunk_text, section_title)
     client = _get_client()
@@ -107,10 +101,7 @@ def generate_node_from_chunk(chunk_text: str, section_title: str | None = None) 
 
 
 def _prepare_image_bytes_for_vision(image_bytes: bytes) -> Tuple[bytes, str]:
-    """
-    Normalize to RGB JPEG, downscale very large pages so the API stays within limits.
-    Returns (bytes, mime_type).
-    """
+    """Flatten alpha → RGB, shrink huge scans, JPEG for the vision endpoint."""
     from PIL import Image
 
     img = Image.open(io.BytesIO(image_bytes))
@@ -149,10 +140,7 @@ Output ONLY the Markdown document. No preamble, no closing commentary. Do not wr
 
 
 def handwriting_image_to_markdown(image_bytes: bytes, filename: str = "") -> Tuple[str, str]:
-    """
-    Primary handwriting path: GPT-4o (vision) reads the image and returns structured Markdown.
-    Returns (markdown, plain_text_preview) for APIs that expose raw_text.
-    """
+    """Vision model → markdown plus a stripped preview string for the UI."""
     if not _has_openai():
         raise RuntimeError("OPENAI_API_KEY required for vision handwriting OCR")
 
@@ -197,9 +185,7 @@ def handwriting_image_to_markdown(image_bytes: bytes, filename: str = "") -> Tup
 
 
 def generate_markdown_structure(ocr_text: str) -> str:
-    """
-    Clean and structure OCR output into Markdown. When OpenAI not configured, returns text as-is.
-    """
+    """Pretty-print noisy OCR; passthrough if we can't call the API."""
     if not _has_openai():
         return (ocr_text or "").strip()
     client = _get_client()
@@ -218,7 +204,7 @@ Output only the Markdown, no explanation."""
     return response.choices[0].message.content.strip()
 
 
-# Prompt templates for Notebook-style "ask brain" modes
+# System prompts for the /ask modes
 SUMMARY_SYSTEM = """You are a study assistant. Given notes and documents from the user's knowledge base, produce a clear, concise summary. Use bullet points or short paragraphs. Focus on main ideas and key facts. Output only the summary, no preamble."""
 
 STUDY_GUIDE_SYSTEM = """You are a study assistant. Given notes and documents, create a study guide: key concepts, definitions, and main takeaways. Use headings and bullet points. Output only the study guide."""
@@ -227,11 +213,7 @@ KEY_POINTS_SYSTEM = """You are a study assistant. Given notes and documents, lis
 
 
 def ask_brain(context_text: str, user_prompt: str, mode: str = "custom") -> str:
-    """
-    Send context (concatenated node/source content) and user prompt to OpenAI.
-    mode: "summary" | "study_guide" | "key_points" | "custom"
-    Returns the assistant reply. Raises if OpenAI not configured or on API error.
-    """
+    """Stuff context + user question into chat; picks system prompt from mode."""
     if not _has_openai():
         return "OpenAI is not configured. Add OPENAI_API_KEY to your environment to use summaries and study guides."
 

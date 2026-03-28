@@ -1,6 +1,4 @@
-"""
-Extract text from .pptx files.
-"""
+"""PowerPoint → plain text."""
 import io
 
 try:
@@ -10,9 +8,7 @@ except ImportError:
 
 
 def extract_text_from_pptx(file_stream) -> str:
-    """
-    Read PPTX from file-like object. Returns full document text (all slides).
-    """
+    """Slurp all slide text from a file-like PPTX."""
     if Presentation is None:
         raise RuntimeError("python-pptx required for PPTX extraction. pip install python-pptx")
 

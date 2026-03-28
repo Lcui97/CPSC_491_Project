@@ -15,7 +15,6 @@ export default function Landing() {
   return (
     <GeometricBackground>
       <div className="flex flex-col min-h-screen">
-        {/* Header */}
         <header className="flex items-center justify-between px-6 py-4">
           <div className="flex items-center gap-8">
             <Link to="/" className="flex items-center gap-2 text-xl font-semibold text-[rgb(var(--text))]">
@@ -47,7 +46,6 @@ export default function Landing() {
           </div>
         </header>
 
-        {/* left-aligned */}
         <main className="flex-1 flex flex-col items-start justify-center px-6 sm:px-12 lg:px-20 py-16 max-w-2xl">
           <h1 className="text-4xl sm:text-5xl font-bold text-[rgb(var(--text))] leading-tight">
             The future of knowledge happens together

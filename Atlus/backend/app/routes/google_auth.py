@@ -43,7 +43,7 @@ def google():
         db.session.add(user)
         db.session.commit()
 
-    # Keep JWT subject as string for broad compatibility with JWT validators.
+    # `sub` as string keeps validators happy
     access_token = create_access_token(identity=str(user.id))
     refresh_token = create_refresh_token(identity=str(user.id))
     return jsonify({"access_token": access_token, "refresh_token": refresh_token})

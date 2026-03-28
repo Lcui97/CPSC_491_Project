@@ -1,7 +1,4 @@
-/**
- * API client: sends Bearer token from localStorage. On 401, clears tokens and redirects to login.
- * No refresh token logic - single source of truth: access_token.
- */
+/** fetch wrapper: attaches JWT, JSON headers, and bounces to /login on 401. */
 const API_URL = import.meta.env.VITE_API_URL ?? '';
 
 function clearTokensAndGoToLogin() {
@@ -52,9 +49,7 @@ export async function api(path, options = {}) {
   return data;
 }
 
-/**
- * Upload files: POST multipart to path with optional form fields.
- */
+/** Multipart POST — optional extra form fields plus files[] or single file. */
 export async function apiUpload(path, fields = {}, files = []) {
   const form = new FormData();
   Object.entries(fields).forEach(([k, v]) => {

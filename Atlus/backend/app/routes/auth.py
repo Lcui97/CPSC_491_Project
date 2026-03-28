@@ -16,7 +16,7 @@ bp = Blueprint("auth", __name__)
 
 @bp.route("/health", methods=["GET"])
 def health():
-    """No-auth check that backend is reachable."""
+    """Cheap ping for deploy / dev sanity."""
     return jsonify({"status": "ok"})
 
 
@@ -51,7 +51,7 @@ def login():
     if not user or not user.password_hash or not check_password(password, user.password_hash):
         return jsonify({"error": "invalid credentials"}), 401
 
-    # Keep JWT subject as string for broad compatibility with JWT validators.
+    # Some libs expect `sub` as a string
     access_token = create_access_token(identity=str(user.id))
     refresh_token = create_refresh_token(identity=str(user.id))
     return jsonify({"access_token": access_token, "refresh_token": refresh_token})
@@ -60,7 +60,7 @@ def login():
 @bp.route("/refresh", methods=["POST"])
 @jwt_required(refresh=True)
 def refresh():
-    """Exchange a valid refresh token for a new access token. Call with Authorization: Bearer <refresh_token>."""
+    """POST with refresh JWT in Authorization → new access token."""
     user_id = get_jwt_identity()
     try:
         user_id = int(user_id)
@@ -76,6 +76,5 @@ def refresh():
 @bp.route("/logout", methods=["POST"])
 @jwt_required(optional=True)
 def logout():
-    """Client should clear access_token and refresh_token from storage after calling this."""
-    # Optional: add refresh token to a blacklist here if you store them server-side
+    """Mostly a hook for the client to wipe localStorage; server is stateless here."""
     return jsonify({"message": "ok"}), 200

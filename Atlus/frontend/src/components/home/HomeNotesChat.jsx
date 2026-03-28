@@ -2,13 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { useBrainAsk } from '../../api/brainQueries';
 
-/**
- * ChatGPT-style Q&A over one brain’s notes (same API as Brain landing “Ask your brain”).
- */
+/** Notes + calendar context chat for whichever brain is selected (same /ask API as elsewhere). */
 export default function HomeNotesChat({ activeBrain, brains = [], onSelectBrain }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
+  const [listening, setListening] = useState(false);
+  const [speakEnabled, setSpeakEnabled] = useState(true);
   const bottomRef = useRef(null);
+  const recognitionRef = useRef(null);
 
   const effectiveBrainId = activeBrain?.id || brains[0]?.id || '';
   const contextName = activeBrain?.name || brains[0]?.name || 'your notes';
@@ -19,8 +20,21 @@ export default function HomeNotesChat({ activeBrain, brains = [], onSelectBrain 
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, askMutation.isPending]);
 
+  useEffect(() => {
+    if (!speakEnabled) return;
+    if (!messages.length) return;
+    const last = messages[messages.length - 1];
+    if (last.role !== 'assistant' || !last.content) return;
+    if (!('speechSynthesis' in window)) return;
+    const utterance = new SpeechSynthesisUtterance(last.content.replace(/[#*_`>-]/g, ' ').slice(0, 1200));
+    utterance.rate = 1;
+    utterance.pitch = 1;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utterance);
+  }, [messages, speakEnabled]);
+
   const send = useCallback(
-    async (mode, textOverride = null) => {
+    async (mode, textOverride = null, extra = {}) => {
       const text = (textOverride ?? input).trim();
       const userPrompt =
         text ||
@@ -31,7 +45,7 @@ export default function HomeNotesChat({ activeBrain, brains = [], onSelectBrain 
       setMessages((prev) => [...prev, { role: 'user', content: userPrompt }]);
 
       try {
-        const data = await askMutation.mutateAsync({ prompt: userPrompt, mode });
+        const data = await askMutation.mutateAsync({ prompt: userPrompt, mode, ...extra });
         const reply = data?.response ?? '';
         setMessages((prev) => [...prev, { role: 'assistant', content: reply || '—' }]);
       } catch (err) {
@@ -48,6 +62,30 @@ export default function HomeNotesChat({ activeBrain, brains = [], onSelectBrain 
     e.preventDefault();
     if (!input.trim() || askMutation.isPending) return;
     send('custom', input.trim());
+  }
+
+  function startVoiceInput() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setMessages((prev) => [...prev, { role: 'assistant', content: 'Voice input is not supported in this browser.' }]);
+      return;
+    }
+    const rec = new SpeechRecognition();
+    recognitionRef.current = rec;
+    rec.lang = 'en-US';
+    rec.interimResults = false;
+    rec.maxAlternatives = 1;
+    rec.onstart = () => setListening(true);
+    rec.onend = () => setListening(false);
+    rec.onerror = () => setListening(false);
+    rec.onresult = (ev) => {
+      const transcript = ev?.results?.[0]?.[0]?.transcript || '';
+      const text = transcript.trim();
+      if (!text) return;
+      setInput(text);
+      send('custom', text);
+    };
+    rec.start();
   }
 
   return (
@@ -76,6 +114,25 @@ export default function HomeNotesChat({ activeBrain, brains = [], onSelectBrain 
             ))}
           </select>
         ) : null}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setSpeakEnabled((v) => !v)}
+            className="text-xs px-2 py-1 rounded border border-[color:var(--hairline)] text-[var(--text2)]"
+            title="Toggle voice playback"
+          >
+            {speakEnabled ? 'Voice on' : 'Voice off'}
+          </button>
+          <button
+            type="button"
+            onClick={startVoiceInput}
+            disabled={askMutation.isPending || listening}
+            className="text-xs px-2 py-1 rounded border border-[color:var(--hairline)] text-[var(--text2)] disabled:opacity-50"
+            title="Speak to assistant"
+          >
+            {listening ? 'Listening…' : 'Mic'}
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-4">
@@ -132,12 +189,19 @@ export default function HomeNotesChat({ activeBrain, brains = [], onSelectBrain 
             { label: 'Summarize', mode: 'summary' },
             { label: 'Study guide', mode: 'study_guide' },
             { label: 'Key points', mode: 'key_points' },
-          ].map(({ label, mode }) => (
+            { label: 'Last 2 weeks', mode: 'custom', extra: { time_scope: 'last_2_weeks' }, prompt: 'Summarize my notes from the past two weeks.' },
+            {
+              label: 'Upcoming test prep',
+              mode: 'custom',
+              extra: { response_intent: 'study_for_upcoming', upcoming_days: 21 },
+              prompt: 'Help me study for upcoming quizzes/tests using my notes.',
+            },
+          ].map(({ label, mode, extra, prompt }, idx) => (
             <button
-              key={mode}
+              key={`${mode}-${idx}`}
               type="button"
               disabled={!effectiveBrainId || askMutation.isPending}
-              onClick={() => send(mode)}
+              onClick={() => send(mode, prompt || null, extra || {})}
               className="text-xs px-3 py-1 rounded-full border border-[color:var(--hairline-strong)] text-[var(--text2)] hover:border-[var(--accent)]/50 hover:text-[var(--accent)] disabled:opacity-40"
             >
               {label}

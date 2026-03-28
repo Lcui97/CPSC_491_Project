@@ -10,6 +10,7 @@ import BrainSourcesView from './pages/BrainSourcesView';
 import DocumentIngestion from './pages/DocumentIngestion';
 import KnowledgeGapAnalysis from './pages/KnowledgeGapAnalysis';
 import SharedBrain from './pages/SharedBrain';
+import CalendarPage from './pages/Calendar';
 import QuickSwitcher from './components/note/QuickSwitcher';
 
 function App() {
@@ -65,6 +66,22 @@ function App() {
         element={
           <ProtectedRoute>
             <BrainSourcesView />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/calendar"
+        element={
+          <ProtectedRoute>
+            <CalendarPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/brain/:brainId/calendar"
+        element={
+          <ProtectedRoute>
+            <CalendarPage />
           </ProtectedRoute>
         }
       />

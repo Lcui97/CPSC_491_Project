@@ -1,10 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 
-/**
- * Header for all brain routes (/brain/:brainId/*). Back button top-left:
- * - If browser has history (length > 1), go back().
- * - Otherwise navigate to /home (brain list).
- */
+/** Brain sub-routes: back goes history if there is any, else /home. */
 export default function BrainExplorerHeader({ title, right }) {
   const navigate = useNavigate();
 
