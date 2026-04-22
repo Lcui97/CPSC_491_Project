@@ -6,8 +6,6 @@ export const brainKeys = {
   nodes: (brainId, params) => ['brains', brainId, 'nodes', params],
   node: (nodeId) => ['nodes', nodeId],
   meSummary: () => ['me', 'summary'],
-  meActivity: (limit) => ['me', 'activity', limit],
-  meNotes: (params) => ['me', 'notes', params],
   sources: (brainId) => ['brains', brainId, 'sources'],
   calendarGlobal: (params) => ['calendar-events', params],
   classes: () => ['classes'],
@@ -56,13 +54,6 @@ export function useMeSummary() {
   });
 }
 
-export function useMeActivity(limit = 8) {
-  return useQuery({
-    queryKey: brainKeys.meActivity(limit),
-    queryFn: () => api(`/api/me/activity?limit=${limit}`).then((r) => r.items || []),
-  });
-}
-
 export function useAllMyNotes(params = {}) {
   const { page = 1, per_page = 48, q = '' } = params;
   const notesKey = ['me', 'notes', { page, per_page, q }];
@@ -101,7 +92,6 @@ export function useDeleteBrain() {
       queryClient.invalidateQueries({ queryKey: brainKeys.list() });
       queryClient.invalidateQueries({ queryKey: brainKeys.classes() });
       queryClient.invalidateQueries({ queryKey: ['me', 'notes'] });
-      queryClient.invalidateQueries({ queryKey: ['me', 'activity'] });
       queryClient.invalidateQueries({ queryKey: brainKeys.meSummary() });
       queryClient.invalidateQueries({ queryKey: ['calendar-events'] });
     },
@@ -163,22 +153,6 @@ export function useBrainSources(brainId) {
     queryKey: brainKeys.sources(brainId),
     queryFn: () => api(`/api/brain/${brainId}/sources`).then((r) => r.sources || []),
     enabled: !!brainId,
-  });
-}
-
-export function useBrainAsk(brainId) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (body) => {
-      if (!brainId) {
-        return Promise.reject(new Error('Select a class in the sidebar first.'));
-      }
-      return api(`/api/brain/${brainId}/ask`, { method: 'POST', body: JSON.stringify(body) });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: brainKeys.sources(brainId) });
-      queryClient.invalidateQueries({ queryKey: brainKeys.nodes(brainId, {}) });
-    },
   });
 }
 
