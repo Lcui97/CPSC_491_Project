@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import TopBar from '../components/home/TopBar';
 import { api, apiUpload } from '../api/client';
 import { useUploadSyllabus } from '../api/brainQueries';
 
-const ALLOWED_EXT = ['.pdf', '.docx', '.pptx', '.txt', '.md', '.markdown'];
+const ALLOWED_EXT = [
+  '.pdf', '.docx', '.pptx', '.txt', '.md', '.markdown',
+  '.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.tif', '.tiff',
+];
 
 function isDocument(file) {
   const ext = '.' + (file.name?.split('.').pop() || '').toLowerCase();
@@ -12,6 +15,9 @@ function isDocument(file) {
 }
 
 export default function DocumentIngestion() {
+  const [searchParams] = useSearchParams();
+  const brainFromQuery = (searchParams.get('brain') || '').trim();
+
   const [dragActive, setDragActive] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [brains, setBrains] = useState([]);
@@ -24,13 +30,21 @@ export default function DocumentIngestion() {
 
   useEffect(() => {
     api('/api/brain/list')
-      .then((r) => {
-        const list = r.brains || [];
-        setBrains(list);
-        if (list.length > 0 && !selectedBrainId) setSelectedBrainId(list[0].id);
-      })
+      .then((r) => setBrains(r.brains || []))
       .catch(() => setBrains([]));
   }, []);
+
+  useEffect(() => {
+    if (!brains.length) {
+      setSelectedBrainId('');
+      return;
+    }
+    if (brainFromQuery && brains.some((b) => b.id === brainFromQuery)) {
+      setSelectedBrainId(brainFromQuery);
+      return;
+    }
+    setSelectedBrainId((prev) => (prev && brains.some((b) => b.id === prev) ? prev : brains[0].id));
+  }, [brains, brainFromQuery]);
 
   function handleDrag(e) {
     e.preventDefault();
@@ -64,28 +78,34 @@ export default function DocumentIngestion() {
     }
     const files = selectedFiles.filter(isDocument);
     if (files.length === 0) {
-      setMessage({ error: 'Add at least one PDF, DOCX, PPTX, TXT, or Markdown file.' });
+      setMessage({
+        error: 'Add at least one supported file: PDF, DOCX, PPTX, text/Markdown, or a scan (JPG, PNG, WebP, etc.).',
+      });
       return;
     }
     setIngesting(true);
     try {
       const result = await apiUpload('/api/brain/ingest', { brain_id: selectedBrainId }, files);
       const nodes = result?.nodes_created ?? 0;
-      const links = result?.links_created ?? 0;
       const errors = result?.errors ?? [];
-      if (errors.length > 0) {
-        setMessage({ error: errors.join(' ') });
-      } else if (result?.processing) {
+      const errText = errors.length ? errors.join(' ') : '';
+
+      if (result?.processing) {
         window.dispatchEvent(new CustomEvent('atlus-ingest-pending', { detail: { pending: true } }));
         setMessage({
-          info:
-            result?.message ||
-            'Upload received. Processing runs in the background — Sources in the brain view can take several minutes to update (longer for large files).',
+          info: result?.message || 'Upload received. Processing runs in the background — Sources in the brain view can take several minutes to update (longer for large files).',
         });
+        setSelectedFiles([]);
+      } else if (errors.length > 0 && nodes === 0) {
+        window.dispatchEvent(new CustomEvent('atlus-ingest-pending', { detail: { pending: false } }));
+        setMessage({ error: errText });
+      } else if (errors.length > 0 && nodes > 0) {
+        window.dispatchEvent(new CustomEvent('atlus-ingest-pending', { detail: { pending: false } }));
+        setMessage({ info: `Ingested ${nodes} note(s). Some files had issues: ${errText}` });
         setSelectedFiles([]);
       } else {
         window.dispatchEvent(new CustomEvent('atlus-ingest-pending', { detail: { pending: false } }));
-        setMessage({ success: `Ingested ${nodes} node(s), ${links} link(s) created.` });
+        setMessage({ success: `Ingested ${nodes} note(s).` });
         setSelectedFiles([]);
       }
     } catch (err) {
@@ -116,30 +136,49 @@ export default function DocumentIngestion() {
     }
   }
 
+  const dropStyle = {
+    border: dragActive ? '2px dashed rgb(var(--accent))' : '2px dashed rgb(var(--border))',
+    background: dragActive ? 'rgba(19, 181, 234, 0.08)' : 'rgb(var(--panel))',
+  };
+
+  const msgBoxStyle = message?.error
+    ? { border: '1px solid rgba(220, 38, 38, 0.4)', background: 'rgba(254, 226, 226, 0.5)', color: '#991b1b' }
+    : message?.success
+      ? { border: '1px solid rgba(16, 185, 129, 0.4)', background: 'rgba(209, 250, 229, 0.5)', color: '#065f46' }
+      : { border: '1px solid rgba(245, 158, 11, 0.35)', background: 'rgba(254, 243, 199, 0.4)', color: '#92400e' };
+
   return (
-    <div className="min-h-screen bg-[rgb(var(--bg))] text-[rgb(var(--text))]">
+    <div className="ingest-page">
       <TopBar breadcrumb="Home › Ingest" />
-      <main className="max-w-3xl mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-semibold text-[rgb(var(--text))]">Document Ingestion</h1>
-          <Link
-            to="/home"
-            className="text-sm text-[rgb(var(--muted))] hover:text-[rgb(var(--text))] transition-colors"
-          >
-            ← Back to Home
-          </Link>
+      <main className="ingest-main">
+        <div className="flex items-center justify-between" style={{ marginBottom: '1.5rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+          <h1 style={{ fontSize: '1.5rem', fontWeight: 600, margin: 0, color: 'rgb(var(--text))' }}>Document Ingestion</h1>
+          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            {brainFromQuery && brains.some((b) => b.id === brainFromQuery) ? (
+              <Link
+                to={`/brain/${encodeURIComponent(brainFromQuery)}/notes`}
+                className="text-link"
+                style={{ fontSize: '0.875rem', color: 'rgb(var(--muted))' }}
+              >
+                ← Back to class notes
+              </Link>
+            ) : null}
+            <Link to="/home" className="text-link" style={{ fontSize: '0.875rem', color: 'rgb(var(--muted))' }}>
+              ← Back to Home
+            </Link>
+          </div>
         </div>
 
-        <div className="space-y-6">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           {brains.length > 0 ? (
-            <div className="bg-[rgb(var(--panel))] border border-[rgb(var(--border))] rounded-xl p-4">
-              <label className="block text-sm font-medium text-[rgb(var(--text))] mb-2">
+            <div className="panel-rgb">
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.5rem', color: 'rgb(var(--text))' }}>
                 Ingest into brain
               </label>
               <select
                 value={selectedBrainId}
                 onChange={(e) => setSelectedBrainId(e.target.value)}
-                className="w-full py-2 px-3 rounded-lg bg-[rgb(var(--panel2))] border border-[rgb(var(--border))] text-[rgb(var(--text))] text-sm"
+                className="input"
               >
                 {brains.map((b) => (
                   <option key={b.id} value={b.id}>{b.name}</option>
@@ -147,8 +186,8 @@ export default function DocumentIngestion() {
               </select>
             </div>
           ) : (
-            <div className="bg-[rgb(var(--panel))] border border-[rgb(var(--border))] rounded-xl p-4">
-              <p className="text-sm text-[rgb(var(--muted))]">Create a brain first in Home before uploading documents or syllabus.</p>
+            <div className="panel-rgb">
+              <p style={{ fontSize: '0.875rem', color: 'rgb(var(--muted))', margin: 0 }}>Create a brain first in Home before uploading documents or syllabus.</p>
             </div>
           )}
 
@@ -157,67 +196,62 @@ export default function DocumentIngestion() {
             onDragLeave={handleDrag}
             onDragOver={handleDrag}
             onDrop={handleDrop}
-            className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
-              dragActive
-                ? 'border-[rgb(var(--accent))] bg-[rgb(var(--accent))]/10'
-                : 'border-[rgb(var(--border))] bg-[rgb(var(--panel))]'
-            }`}
+            className="ingest-drop"
+            style={dropStyle}
           >
-            <p className="text-[rgb(var(--muted))] mb-4">
-              Drag and drop documents here, or click to browse
+            <p style={{ color: 'rgb(var(--muted))', marginBottom: '1rem' }}>
+              Drag and drop here, or browse — includes PDFs, Office docs, Markdown/text, and photos (JPG, PNG, …) for OCR.
             </p>
             <input
               type="file"
               multiple
-              accept=".pdf,.docx,.pptx,.txt,.md,.markdown"
+              accept=".pdf,.docx,.pptx,.txt,.md,.markdown,.jpg,.jpeg,.png,.webp,.gif,.bmp,.tif,.tiff"
               onChange={handleFileSelect}
-              className="hidden"
+              style={{ display: 'none' }}
               id="file-input"
             />
-            <label
-              htmlFor="file-input"
-              className="inline-block py-2 px-4 rounded-lg bg-[rgb(var(--accent))] hover:bg-[rgb(var(--accentHover))] text-white text-sm font-medium cursor-pointer transition-colors"
-            >
+            <label htmlFor="file-input" className="btn btn-primary" style={{ cursor: 'pointer' }}>
               Select Files
             </label>
           </div>
 
-          <div className="bg-[rgb(var(--panel))] border border-[rgb(var(--border))] rounded-xl p-4">
-            <h2 className="text-sm font-medium text-[rgb(var(--text))] mb-2">Syllabus to calendar</h2>
-            <p className="text-xs text-[rgb(var(--muted))] mb-3">
+          <div className="panel-rgb">
+            <h2 style={{ fontSize: '0.875rem', fontWeight: 500, margin: '0 0 0.5rem', color: 'rgb(var(--text))' }}>Syllabus to calendar</h2>
+            <p style={{ fontSize: '0.75rem', color: 'rgb(var(--muted))', margin: '0 0 0.75rem' }}>
               Upload one syllabus and Atlus will extract quizzes, tests, midterms, finals, and project deadlines into your calendar.
             </p>
-            <div className="flex flex-col sm:flex-row gap-2">
+            <div className="flex flex-col gap-2" style={{ alignItems: 'stretch' }}>
               <input
                 type="file"
                 accept=".pdf,.docx,.pptx,.txt,.md,.markdown"
                 onChange={(e) => setSyllabusFile(e.target.files?.[0] || null)}
-                className="flex-1 text-sm text-[rgb(var(--text))]"
+                className="flex-1"
+                style={{ fontSize: '0.875rem', color: 'rgb(var(--text))' }}
               />
               <button
                 type="button"
                 onClick={handleSyllabusUpload}
                 disabled={uploadSyllabus.isPending}
-                className="h-10 px-4 rounded-lg bg-[rgb(var(--accent))] hover:bg-[rgb(var(--accentHover))] disabled:opacity-50 text-white text-sm font-medium"
+                className="btn btn-primary"
               >
                 {uploadSyllabus.isPending ? 'Parsing syllabus…' : 'Upload syllabus'}
               </button>
             </div>
-            <p className="mt-2 text-xs text-[rgb(var(--muted))]">
+            <p style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: 'rgb(var(--muted))' }}>
               Selected: {syllabusFile?.name || 'No syllabus file selected'}
               {selectedBrainId ? '' : ' · Select a brain above first'}
             </p>
             {syllabusResult?.events?.length ? (
-              <div className="mt-3 rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--panel2))] p-3">
-                <p className="text-xs text-[rgb(var(--muted))] mb-2">Extracted events (saved, editable in Calendar):</p>
-                <ul className="space-y-1 max-h-52 overflow-auto">
+              <div style={{ marginTop: '0.75rem', borderRadius: '0.5rem', border: '1px solid rgb(var(--border))', background: 'rgb(var(--panel2))', padding: '0.75rem' }}>
+                <p style={{ fontSize: '0.75rem', color: 'rgb(var(--muted))', margin: '0 0 0.5rem' }}>Extracted events (saved, editable in Calendar):</p>
+                <ul style={{ maxHeight: '13rem', overflow: 'auto', margin: 0, paddingLeft: '1.25rem' }}>
                   {syllabusResult.events.map((ev) => (
-                    <li key={ev.id} className="text-sm text-[rgb(var(--text))]">
+                    <li key={ev.id} style={{ fontSize: '0.875rem', color: 'rgb(var(--text))' }}>
                       {new Date(ev.due_at).toLocaleDateString()} - [{ev.event_type}] {ev.title}
                     </li>
                   ))}
                 </ul>
-                <Link to={`/brain/${selectedBrainId}/calendar`} className="inline-block mt-2 text-xs text-[rgb(var(--accent))] hover:underline">
+                <Link to={`/brain/${selectedBrainId}/calendar`} className="text-link" style={{ fontSize: '0.75rem', display: 'inline-block', marginTop: '0.5rem' }}>
                   Open brain calendar
                 </Link>
               </div>
@@ -225,24 +259,27 @@ export default function DocumentIngestion() {
           </div>
 
           {selectedFiles.length > 0 && (
-            <div className="bg-[rgb(var(--panel))] border border-[rgb(var(--border))] rounded-xl p-4">
-              <h2 className="text-sm font-medium text-[rgb(var(--text))] mb-3">
+            <div className="panel-rgb">
+              <h2 style={{ fontSize: '0.875rem', fontWeight: 500, margin: '0 0 0.75rem', color: 'rgb(var(--text))' }}>
                 Selected files ({selectedFiles.length})
               </h2>
-              <ul className="space-y-2 mb-4">
+              <ul style={{ listStyle: 'none', margin: '0 0 1rem', padding: 0 }}>
                 {selectedFiles.map((file, i) => (
                   <li
                     key={`${file.name}-${i}`}
-                    className="flex items-center justify-between py-2 px-3 rounded-lg bg-[rgb(var(--panel2))] border border-[rgb(var(--border))]"
+                    className="flex items-center justify-between"
+                    style={{
+                      padding: '0.5rem 0.75rem',
+                      marginBottom: '0.5rem',
+                      borderRadius: '0.5rem',
+                      background: 'rgb(var(--panel2))',
+                      border: '1px solid rgb(var(--border))',
+                    }}
                   >
-                    <span className="text-sm text-[rgb(var(--text))] truncate flex-1">
+                    <span className="truncate flex-1" style={{ fontSize: '0.875rem', color: 'rgb(var(--text))' }}>
                       {file.name}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => removeFile(i)}
-                      className="ml-2 text-xs text-[rgb(var(--muted))] hover:text-red-500 transition-colors"
-                    >
+                    <button type="button" onClick={() => removeFile(i)} className="text-link" style={{ fontSize: '0.75rem', marginLeft: '0.5rem', color: 'rgb(var(--muted))' }}>
                       Remove
                     </button>
                   </li>
@@ -252,29 +289,22 @@ export default function DocumentIngestion() {
                 type="button"
                 onClick={handleIngest}
                 disabled={ingesting || !selectedBrainId}
-                className="w-full py-2 px-4 rounded-lg bg-[rgb(var(--accent))] hover:bg-[rgb(var(--accentHover))] disabled:opacity-50 text-white font-medium transition-colors"
+                className="btn btn-primary"
+                style={{ width: '100%' }}
               >
-                {ingesting ? 'Sending…' : 'Ingest documents'}
+                {ingesting ? 'Processing… (large PDFs can take several minutes)' : 'Ingest documents'}
               </button>
             </div>
           )}
 
           {message && (
-            <div
-              className={`rounded-xl border p-4 text-sm ${
-                message.error
-                  ? 'border-red-500/40 bg-red-500/10 text-red-800'
-                  : message.success
-                    ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-800'
-                    : 'border-amber-500/30 bg-amber-500/5 text-amber-800'
-              }`}
-            >
+            <div style={{ borderRadius: '0.75rem', padding: '1rem', fontSize: '0.875rem', ...msgBoxStyle }}>
               {message.error || message.success || message.info}
             </div>
           )}
 
-          <p className="text-sm text-[rgb(var(--muted))]">
-            Supported formats: PDF, DOCX, PPTX, TXT, Markdown. Ingest is asynchronous — the brain&apos;s Sources list updates when the server finishes (often a few minutes).
+          <p style={{ fontSize: '0.875rem', color: 'rgb(var(--muted))' }}>
+            Supported formats: PDF, DOCX, PPTX, TXT, Markdown, and scans (JPG, PNG, etc.). With the default SQLite setup, ingest finishes in this tab and you get a note count or error details. If the server uses a different database, ingest may run in the background and Sources will update when done.
           </p>
         </div>
       </main>

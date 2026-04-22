@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { api, apiUpload } from '../../api/client';
 
 const API_URL = import.meta.env.VITE_API_URL ?? '';
@@ -20,7 +20,8 @@ export default function BrainCreateModal({ onClose, onCreated }) {
   const [ocrResult, setOcrResult] = useState(null);
   const [ocrLoading, setOcrLoading] = useState(false);
 
-  const isImage = (file) => /\.(jpe?g|png|webp|gif)$/i.test(file.name);
+  const isImage = (file) => /\.(jpe?g|png|webp|gif|bmp|tiff?)$/i.test(file.name);
+  const isPdfFile = (file) => /\.pdf$/i.test(file?.name || '');
   const pdfOrText = (file) => /\.(pdf|docx|pptx|txt|md|markdown)$/i.test(file.name);
 
   const handleDrag = useCallback((e) => {
@@ -51,8 +52,8 @@ export default function BrainCreateModal({ onClose, onCreated }) {
     setFiles((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
-  const imageFiles = files.filter(isImage);
-  const documentFiles = files.filter(pdfOrText);
+  const handwrittenFiles = files.filter((f) => isImage(f) || isPdfFile(f));
+  const documentFiles = files.filter((f) => pdfOrText(f) && !isImage(f) && !isPdfFile(f));
 
   const handleCreate = async () => {
     setError(null);
@@ -60,16 +61,19 @@ export default function BrainCreateModal({ onClose, onCreated }) {
     try {
       const payload = { name: (name || 'New Brain').trim(), badge };
       let brain;
-      if (documentFiles.length > 0 && imageFiles.length === 0) {
+      if (documentFiles.length > 0) {
         brain = await apiUpload('/api/brain/create', payload, documentFiles);
       } else {
-        brain = await apiUpload('/api/brain/create', payload, documentFiles);
+        brain = await api('/api/brain/create', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
       }
       const brainData = brain.brain;
       setCreatedBrain(brainData);
 
-      if (imageFiles.length > 0) {
-        setPendingImages(imageFiles);
+      if (handwrittenFiles.length > 0) {
+        setPendingImages(handwrittenFiles);
         setCurrentImageIndex(0);
         setStep('handwritten');
         setOcrResult(null);
@@ -87,6 +91,17 @@ export default function BrainCreateModal({ onClose, onCreated }) {
 
   const currentImage = pendingImages[currentImageIndex];
   const showHandwrittenStep = step === 'handwritten' && currentImage;
+
+  const localPreviewUrl = useMemo(() => {
+    if (!currentImage) return null;
+    return URL.createObjectURL(currentImage);
+  }, [currentImage]);
+
+  useEffect(() => {
+    return () => {
+      if (localPreviewUrl) URL.revokeObjectURL(localPreviewUrl);
+    };
+  }, [localPreviewUrl]);
 
   const runOcr = async () => {
     if (!createdBrain || !currentImage) return;
@@ -122,7 +137,7 @@ export default function BrainCreateModal({ onClose, onCreated }) {
           brain_id: createdBrain.id,
           markdown: ocrResult.markdown,
           source_file_id: ocrResult.source_file_id ?? undefined,
-          node_type: ocrResult.source_file_id ? 'handwritten' : undefined,
+          node_type: ocrResult.source_file_id != null ? 'handwritten' : undefined,
         }),
       });
       if (currentImageIndex + 1 >= pendingImages.length) {
@@ -150,50 +165,42 @@ export default function BrainCreateModal({ onClose, onCreated }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[color:var(--veil)]" onClick={onClose}>
-      <div
-        className="bg-[rgb(var(--panel))] border border-[rgb(var(--border))] rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[rgb(var(--border))]">
-          <h2 className="text-lg font-semibold text-[rgb(var(--text))]">
+    <div className="modal-backdrop" onClick={onClose} role="presentation">
+      <div className="modal-card" onClick={(e) => e.stopPropagation()} role="dialog">
+        <div className="modal-card-header">
+          <h2 className="modal-card-title">
             {showHandwrittenStep ? 'Handwritten note' : 'Create Brain'}
           </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-2 rounded-lg text-[rgb(var(--muted))] hover:bg-[rgb(var(--panel2))] hover:text-[rgb(var(--text))]"
-          >
+          <button type="button" onClick={onClose} className="modal-close-btn" aria-label="Close">
             ✕
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <div className={`modal-card-body ${!showHandwrittenStep ? 'stack' : ''}`}>
           {!showHandwrittenStep && (
             <>
               <div>
-                <label className="block text-sm font-medium text-[rgb(var(--text))] mb-1">Name</label>
+                <label className="form-label" htmlFor="brain-create-name">
+                  Name
+                </label>
                 <input
+                  id="brain-create-name"
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="e.g. CS 101 Notes"
-                  className="w-full px-3 py-2 rounded-lg bg-[rgb(var(--bg))] border border-[rgb(var(--border))] text-[rgb(var(--text))] placeholder:text-[rgb(var(--muted))] focus:outline-none focus:ring-2 focus:ring-[rgb(var(--accent))]"
+                  className="field-input"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-[rgb(var(--text))] mb-1">Type</label>
-                <div className="flex gap-2 flex-wrap">
+                <span className="form-label">Type</span>
+                <div className="badge-pill-group">
                   {BADGES.map((b) => (
                     <button
                       key={b}
                       type="button"
                       onClick={() => setBadge(b)}
-                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                        badge === b
-                          ? 'bg-[rgb(var(--accent))] text-white'
-                          : 'bg-[rgb(var(--panel2))] text-[rgb(var(--muted))] hover:text-[rgb(var(--text))]'
-                      }`}
+                      className={`badge-pill ${badge === b ? 'is-on' : ''}`}
                     >
                       {b}
                     </button>
@@ -202,7 +209,7 @@ export default function BrainCreateModal({ onClose, onCreated }) {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-[rgb(var(--text))] mb-2">
+                <label className="form-label" htmlFor="brain-create-files">
                   Add documents (at creation)
                 </label>
                 <div
@@ -210,11 +217,9 @@ export default function BrainCreateModal({ onClose, onCreated }) {
                   onDragLeave={handleDrag}
                   onDragOver={handleDrag}
                   onDrop={handleDrop}
-                  className={`border-2 border-dashed rounded-xl p-6 text-center transition-colors ${
-                    dragActive ? 'border-[rgb(var(--accent))] bg-[rgb(var(--accent))]/10' : 'border-[rgb(var(--border))] bg-[rgb(var(--panel2))]'
-                  }`}
+                  className={`drop-zone ${dragActive ? 'is-active' : ''}`}
                 >
-                  <p className="text-[rgb(var(--muted))] text-sm mb-3">
+                  <p style={{ color: 'rgb(var(--muted))', fontSize: '0.875rem', margin: '0 0 0.75rem' }}>
                     PDF, DOCX, PPTX, TXT, Markdown, or JPEG/PNG (handwriting uses OCR after create)
                   </p>
                   <input
@@ -222,29 +227,19 @@ export default function BrainCreateModal({ onClose, onCreated }) {
                     multiple
                     accept={ACCEPT}
                     onChange={handleFileSelect}
-                    className="hidden"
+                    style={{ display: 'none' }}
                     id="brain-create-files"
                   />
-                  <label
-                    htmlFor="brain-create-files"
-                    className="inline-block py-2 px-4 rounded-lg bg-[rgb(var(--accent))] hover:bg-[rgb(var(--accentHover))] text-white text-sm font-medium cursor-pointer transition-colors"
-                  >
+                  <label htmlFor="brain-create-files" className="btn-sm-ocr" style={{ display: 'inline-block', cursor: 'pointer' }}>
                     Select files
                   </label>
                 </div>
                 {files.length > 0 && (
-                  <ul className="mt-2 space-y-1">
+                  <ul style={{ listStyle: 'none', margin: '0.5rem 0 0', padding: 0 }}>
                     {files.map((file, i) => (
-                      <li
-                        key={`${file.name}-${i}`}
-                        className="flex items-center justify-between py-1.5 px-2 rounded bg-[rgb(var(--panel2))] text-sm text-[rgb(var(--text))]"
-                      >
+                      <li key={`${file.name}-${i}`} className="file-list-row">
                         <span className="truncate">{file.name}</span>
-                        <button
-                          type="button"
-                          onClick={() => removeFile(i)}
-                          className="shrink-0 ml-2 text-[rgb(var(--muted))] hover:text-red-500"
-                        >
+                        <button type="button" onClick={() => removeFile(i)} className="btn-ghost-danger">
                           Remove
                         </button>
                       </li>
@@ -256,91 +251,74 @@ export default function BrainCreateModal({ onClose, onCreated }) {
           )}
 
           {showHandwrittenStep && (
-            <div className="grid grid-cols-2 gap-4 min-h-[320px]">
-              <div className="border border-[rgb(var(--border))] rounded-lg overflow-hidden bg-[rgb(var(--bg))] flex items-center justify-center p-2">
-                <img
-                  src={URL.createObjectURL(currentImage)}
-                  alt="Note"
-                  className="max-w-full max-h-[300px] object-contain"
-                />
+            <div className="brain-create-ocr-grid">
+              <div className="ocr-preview-box">
+                {localPreviewUrl ? (
+                  isPdfFile(currentImage) ? (
+                    <iframe title="Uploaded PDF" src={localPreviewUrl} className="ocr-preview-iframe" />
+                  ) : (
+                    <img src={localPreviewUrl} alt="Note" />
+                  )
+                ) : null}
               </div>
-              <div className="border border-[rgb(var(--border))] rounded-lg overflow-hidden bg-[rgb(var(--bg))] p-3">
+              <div className="ocr-md-box">
                 {!ocrResult ? (
-                  <div className="h-full flex flex-col items-center justify-center text-center">
+                  <div className="flex flex-col items-center justify-center text-center" style={{ flex: 1, minHeight: 180 }}>
                     {ocrLoading ? (
-                      <p className="text-[rgb(var(--muted))] text-sm">
+                      <p style={{ color: 'rgb(var(--muted))', fontSize: '0.875rem', margin: 0 }}>
                         Converting to Markdown… This can take a few minutes for PDFs or scans.
                       </p>
                     ) : (
                       <>
-                        <p className="text-[rgb(var(--muted))] text-sm mb-3">
+                        <p style={{ color: 'rgb(var(--muted))', fontSize: '0.875rem', margin: '0 0 0.75rem' }}>
                           Generate Markdown from this note
                         </p>
-                        <button
-                          type="button"
-                          onClick={runOcr}
-                          className="py-2 px-4 rounded-lg bg-[rgb(var(--accent))] hover:bg-[rgb(var(--accentHover))] text-white text-sm font-medium"
-                        >
+                        <button type="button" onClick={runOcr} className="btn-sm-ocr">
                           Convert to Markdown
                         </button>
                       </>
                     )}
                   </div>
                 ) : (
-                  <div className="h-full flex flex-col">
-                    <pre className="flex-1 overflow-auto text-xs text-[rgb(var(--text))] whitespace-pre-wrap font-sans">
-                      {ocrResult.markdown}
-                    </pre>
-                    <div className="flex gap-2 mt-2">
-                      <button
-                        type="button"
-                        onClick={saveOcrAsNode}
-                        className="py-1.5 px-3 rounded-lg bg-[rgb(var(--accent))] hover:bg-[rgb(var(--accentHover))] text-white text-sm"
-                      >
+                  <>
+                    <pre className="ocr-md-pre">{ocrResult.markdown}</pre>
+                    <div className="flex gap-2" style={{ marginTop: '0.5rem' }}>
+                      <button type="button" onClick={saveOcrAsNode} className="btn-sm-ocr">
                         Save as node
                       </button>
-                      <button
-                        type="button"
-                        onClick={skipHandwritten}
-                        className="py-1.5 px-3 rounded-lg border border-[rgb(var(--border))] text-[rgb(var(--muted))] text-sm hover:text-[rgb(var(--text))]"
-                      >
+                      <button type="button" onClick={skipHandwritten} className="btn-outline-muted">
                         {currentImageIndex + 1 >= pendingImages.length ? 'Done' : 'Skip'}
                       </button>
                     </div>
-                  </div>
+                  </>
                 )}
               </div>
             </div>
           )}
         </div>
 
-        {error && (
-          <div className="px-4 pb-2">
-            <p className="text-sm text-red-500">{error}</p>
+        {error ? (
+          <div className="modal-error">
+            <p style={{ margin: 0 }}>{error}</p>
           </div>
-        )}
+        ) : null}
 
-        <div className="flex justify-end gap-2 px-4 py-3 border-t border-[rgb(var(--border))]">
-          {!showHandwrittenStep && (
-            <>
-              <button
-                type="button"
-                onClick={onClose}
-                className="py-2 px-4 rounded-lg border border-[rgb(var(--border))] text-[rgb(var(--muted))] hover:text-[rgb(var(--text))]"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleCreate}
-                disabled={creating}
-                className="py-2 px-4 rounded-lg bg-[rgb(var(--accent))] hover:bg-[rgb(var(--accentHover))] text-white font-medium disabled:opacity-50"
-              >
-                {creating ? 'Creating…' : 'Create Brain'}
-              </button>
-            </>
-          )}
-        </div>
+        {!showHandwrittenStep ? (
+          <div className="modal-card-footer">
+            <button type="button" onClick={onClose} className="btn-outline-muted" style={{ padding: '0.5rem 1rem' }}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleCreate}
+              disabled={creating}
+              className="btn-sm-ocr"
+              style={{ padding: '0.5rem 1rem', opacity: creating ? 0.6 : 1 }}
+            >
+              {creating ? 'Creating…' : 'Create Brain'}
+            </button>
+          </div>
+        ) : null}
       </div>
     </div>
   );

@@ -3,7 +3,6 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useNode, useUpdateNode, useBrains, useBrainNodes, useBrainSources, useDeleteNode } from '../api/brainQueries';
 import NoteSidebar from '../components/note/NoteSidebar';
 import MarkdownEditor from '../components/note/MarkdownEditor';
-import ContextPanel from '../components/note/ContextPanel';
 import BrainLanding from '../components/note/BrainLanding';
 import HandwrittenSplitEditor from '../components/note/HandwrittenSplitEditor';
 import TopBar from '../components/home/TopBar';
@@ -36,7 +35,7 @@ export default function NoteView() {
   const showHandwrittenSplit =
     !!nodeId &&
     !!displayNode?.source_file_id &&
-    sourceMeta?.file_type === 'image';
+    (sourceMeta?.file_type === 'image' || sourceMeta?.file_type === 'pdf');
 
   useEffect(() => {
     if (!nodeId) {
@@ -103,16 +102,25 @@ export default function NoteView() {
       : '';
 
   return (
-    <div className="min-h-screen bg-[rgb(var(--bg))] text-[rgb(var(--text))] flex flex-col">
-      <TopBar compact breadcrumb={`Home › ${brainName} › Notes`} activeBrainName={brainName} />
+    <div className="note-page">
+      <TopBar compact breadcrumb={`Home › ${brainName} › Notes`} />
       <BrainExplorerHeader
         title={displayNode?.title || (nodeId ? 'Note' : null)}
+        backHref={nodeId && brainId ? `/brain/${brainId}/notes` : undefined}
+        backTitle={nodeId ? 'Back to class notes' : undefined}
         right={
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="explorer-header-actions">
+            <button
+              type="button"
+              onClick={() => navigate(`/ingest?brain=${encodeURIComponent(brainId)}`)}
+              className="text-link"
+            >
+              Upload
+            </button>
             <button
               type="button"
               onClick={() => navigate(`/brain/${brainId}/sources`)}
-              className="text-sm text-[var(--accent)] hover:underline"
+              className="text-link"
             >
               Sources
             </button>
@@ -129,7 +137,8 @@ export default function NoteView() {
                     }
                   );
                 }}
-                className="text-sm text-red-400/90 hover:text-red-300 disabled:opacity-50"
+                className="text-link text-danger"
+                style={{ opacity: deleteNode.isPending ? 0.5 : 1 }}
               >
                 Delete note
               </button>
@@ -137,15 +146,16 @@ export default function NoteView() {
           </div>
         }
       />
-      <div className="flex-1 flex overflow-hidden min-h-0">
+      <div className="note-body">
         <NoteSidebar onSelectNode={() => {}} />
-        <main className="flex-1 flex flex-col overflow-hidden min-w-0">
+        <main className="note-main">
           {nodeId ? (
             showHandwrittenSplit ? (
               <HandwrittenSplitEditor
                 brainId={brainId}
                 sourceFileId={displayNode.source_file_id}
                 filename={sourceFileName}
+                fileType={sourceMeta?.file_type === 'pdf' ? 'pdf' : 'image'}
               >
                 <MarkdownEditor
                   title={title}
@@ -154,9 +164,7 @@ export default function NoteView() {
                   titleInputRef={titleInputRef}
                   metadata={{
                     dateLabel,
-                    brainName,
                     tags: displayNode?.tags || [],
-                    linkedCount: (displayNode?.related_node_ids || []).length,
                   }}
                   sourceLabel={sourceFileName}
                   saveStatus={updateMutation.isPending ? 'saving' : 'saved'}
@@ -174,9 +182,7 @@ export default function NoteView() {
                 titleInputRef={titleInputRef}
                 metadata={{
                   dateLabel,
-                  brainName,
                   tags: displayNode?.tags || [],
-                  linkedCount: (displayNode?.related_node_ids || []).length,
                 }}
                 sourceLabel={sourceFileName}
                 saveStatus={updateMutation.isPending ? 'saving' : 'saved'}
@@ -187,10 +193,9 @@ export default function NoteView() {
               />
             )
           ) : (
-            <BrainLanding />
+            <BrainLanding brainName={brainName} />
           )}
         </main>
-        <ContextPanel nodeId={nodeId} />
       </div>
     </div>
   );

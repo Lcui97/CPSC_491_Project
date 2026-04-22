@@ -61,10 +61,9 @@ export default function QuickSwitcher() {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh] bg-[color:var(--veil)]" onClick={() => setOpen(false)}>
+    <div className="qs-overlay" onClick={() => setOpen(false)}>
       <div
-        className="border rounded-xl shadow-xl w-full max-w-lg overflow-hidden"
-        style={{ background: 'var(--bg2)', borderColor: 'var(--border2)' }}
+        className="qs-panel"
         onClick={(e) => e.stopPropagation()}
       >
         <input
@@ -72,27 +71,25 @@ export default function QuickSwitcher() {
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search brains and notes…"
-          className="w-full px-4 py-3 bg-transparent border-b text-[var(--text1)] placeholder:text-[var(--text3)] focus:outline-none"
-          style={{ borderColor: 'var(--border2)' }}
+          className="qs-input"
           autoFocus
         />
-        <ul className="max-h-72 overflow-y-auto py-2">
-          {loading && <li className="px-4 py-2 text-sm text-[var(--text3)]">Searching…</li>}
-          {!loading && results.length === 0 && <li className="px-4 py-2 text-sm text-[var(--text3)]">No results</li>}
+        <ul className="qs-list">
+          {loading && <li className="text-muted" style={{ padding: '0.5rem 1rem', fontSize: '0.875rem' }}>Searching…</li>}
+          {!loading && results.length === 0 && <li className="text-muted" style={{ padding: '0.5rem 1rem', fontSize: '0.875rem' }}>No results</li>}
           {results.map((item) => (
             <li key={item.type + item.id}>
               <button
                 type="button"
                 onClick={() => handleSelect(item)}
-                className="w-full text-left px-4 py-2 text-sm text-[var(--text1)] hover:bg-[var(--bg4)] flex items-center gap-2"
               >
-                <span className="mono text-[10px] text-[var(--text3)]">{item.type === 'brain' ? 'Brain' : 'Note'}</span>
+                <span className="mono" style={{ fontSize: '10px', color: 'var(--text3)' }}>{item.type === 'brain' ? 'Brain' : 'Note'}</span>
                 {item.title || 'Untitled'}
               </button>
             </li>
           ))}
         </ul>
-        <p className="px-4 py-2 text-xs text-[var(--text3)] border-t mono" style={{ borderColor: 'var(--border2)' }}>
+        <p className="qs-footer">
           ⌘K to toggle · Esc to close
         </p>
       </div>

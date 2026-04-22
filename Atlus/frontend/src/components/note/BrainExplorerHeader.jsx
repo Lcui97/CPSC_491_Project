@@ -1,10 +1,13 @@
 import { useNavigate } from 'react-router-dom';
 
-/** Brain sub-routes: back goes history if there is any, else /home. */
-export default function BrainExplorerHeader({ title, right }) {
+export default function BrainExplorerHeader({ title, right, backHref, backTitle }) {
   const navigate = useNavigate();
 
   const handleBack = () => {
+    if (backHref) {
+      navigate(backHref);
+      return;
+    }
     if (typeof window !== 'undefined' && window.history.length > 1) {
       navigate(-1);
     } else {
@@ -12,16 +15,15 @@ export default function BrainExplorerHeader({ title, right }) {
     }
   };
 
+  const backBtnTitle = backTitle ?? (backHref ? 'Back' : 'Go back');
+
   return (
-    <header
-      className="flex items-center gap-3 px-4 py-2 border-b border-[color:var(--hairline)] shrink-0"
-      style={{ background: 'var(--bg2)', minHeight: 40 }}
-    >
+    <header className="explorer-header">
       <button
         type="button"
         onClick={handleBack}
-        className="flex items-center gap-1.5 text-sm text-[var(--text2)] hover:text-[var(--text1)] transition-colors"
-        title="Back to brain list"
+        className="explorer-back"
+        title={backBtnTitle}
       >
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <line x1="19" y1="12" x2="5" y2="12" />
@@ -29,8 +31,8 @@ export default function BrainExplorerHeader({ title, right }) {
         </svg>
         Back
       </button>
-      {title && <span className="text-sm font-medium text-[var(--text1)] truncate">{title}</span>}
-      <div className="flex-1" />
+      {title ? <span className="explorer-title">{title}</span> : null}
+      <div className="explorer-spacer" />
       {right}
     </header>
   );

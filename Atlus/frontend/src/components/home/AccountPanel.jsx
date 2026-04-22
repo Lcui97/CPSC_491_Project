@@ -1,15 +1,15 @@
 export default function AccountPanel({ welcomeMessage, loading }) {
   return (
-    <div className="bg-[rgb(var(--panel))] border border-[rgb(var(--border))] rounded-xl p-4">
-      <h2 className="text-sm font-medium text-[rgb(var(--text))] mb-3">Account</h2>
-      <div className="space-y-2 text-sm">
+    <div className="panel-rgb">
+      <h2 style={{ fontSize: '0.875rem', fontWeight: 500, color: 'rgb(var(--text))', margin: '0 0 0.75rem' }}>Account</h2>
+      <div style={{ fontSize: '0.875rem' }}>
         {loading ? (
-          <p className="text-[rgb(var(--muted))]">Loading…</p>
+          <p style={{ color: 'rgb(var(--muted))' }}>Loading…</p>
         ) : (
-          <p className="text-[rgb(var(--text))]">{welcomeMessage || '—'}</p>
+          <p style={{ color: 'rgb(var(--text))' }}>{welcomeMessage || '—'}</p>
         )}
-        <p className="text-[rgb(var(--muted))]">Plan: Local MVP</p>
-        <p className="text-[rgb(var(--muted))]">Status: Connected</p>
+        <p style={{ color: 'rgb(var(--muted))', marginTop: '0.5rem' }}>Plan: Local MVP</p>
+        <p style={{ color: 'rgb(var(--muted))' }}>Status: Connected</p>
       </div>
     </div>
   );

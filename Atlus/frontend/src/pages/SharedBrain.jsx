@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import AtlusLogo from '../components/AtlusLogo';
 import { api } from '../api/client';
+import { brainKeys } from '../api/brainQueries';
 
 const API_URL = import.meta.env.VITE_API_URL ?? '';
 
@@ -17,7 +19,11 @@ export default function SharedBrain() {
   const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
-    if (!id) return;
+    if (!id) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
     setLoadError(false);
     fetch(`${API_URL}/api/share/brain/${id}`)
       .then((r) => {
@@ -28,7 +34,8 @@ export default function SharedBrain() {
         if (data.brain) setBrain(data.brain);
         else setLoadError(true);
       })
-      .catch(() => setLoadError(true));
+      .catch(() => setLoadError(true))
+      .finally(() => setLoading(false));
   }, [id]);
 
   async function handleJoin() {
@@ -75,22 +82,21 @@ export default function SharedBrain() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[rgb(var(--bg))] text-[rgb(var(--text))] flex items-center justify-center p-4">
-        <p className="text-[rgb(var(--muted))]">Loading…</p>
+      <div className="shared-page-center">
+        <p style={{ color: 'rgb(var(--muted))' }}>Loading…</p>
       </div>
     );
   }
 
   if (loadError || !brain) {
     return (
-      <div className="min-h-screen bg-[rgb(var(--bg))] text-[rgb(var(--text))] flex items-center justify-center p-4">
-        <div className="text-center max-w-md">
-          <h1 className="text-xl font-semibold text-[rgb(var(--text))] mb-2">Link invalid or expired</h1>
-          <p className="text-[rgb(var(--muted))] mb-6">Ask the owner to generate a new share link from Atlus.</p>
-          <Link
-            to="/"
-            className="inline-block py-2 px-4 rounded-lg bg-[rgb(var(--accent))] hover:bg-[rgb(var(--accentHover))] text-white text-sm"
-          >
+      <div className="shared-page-center">
+        <div className="shared-stack">
+          <h1 style={{ fontSize: '1.25rem', fontWeight: 600, color: 'rgb(var(--text))', margin: '0 0 0.5rem' }}>
+            Link invalid or expired
+          </h1>
+          <p style={{ color: 'rgb(var(--muted))', margin: '0 0 1.5rem' }}>Ask the owner to generate a new share link from Atlus.</p>
+          <Link to="/" className="shared-btn-primary" style={{ display: 'inline-block', width: 'auto', maxWidth: 200, margin: '0 auto' }}>
             Go to Atlus
           </Link>
         </div>
@@ -99,41 +105,33 @@ export default function SharedBrain() {
   }
 
   return (
-    <div className="min-h-screen bg-[rgb(var(--bg))] text-[rgb(var(--text))] flex flex-col">
-      <header className="flex items-center justify-between px-4 py-3 bg-[rgb(var(--panel))] border-b border-[rgb(var(--border))]">
-        <Link to="/" className="flex items-center gap-2 font-semibold text-[rgb(var(--text))]">
-          <AtlusLogo size={28} className="rounded-[10px] border border-[rgb(var(--border))] bg-black" />
+    <div className="shared-page">
+      <header className="shared-header">
+        <Link to="/" className="shared-brand">
+          <AtlusLogo size={28} className="shared-logo" />
           Atlus
         </Link>
-        <Link to="/login" className="text-sm text-[rgb(var(--muted))] hover:text-[rgb(var(--text))]">
+        <Link to="/login" className="shared-link-muted">
           Sign in
         </Link>
       </header>
-      <main className="flex-1 flex items-center justify-center p-6">
-        <div className="w-full max-w-md bg-[rgb(var(--panel))] border border-[rgb(var(--border))] rounded-xl p-6 shadow-lg">
-          <div className="text-center mb-6">
-            <h1 className="text-xl font-semibold text-[rgb(var(--text))] mb-1">{brain.name}</h1>
-            <span className="text-sm text-[rgb(var(--muted))]">{brain.badge}</span>
+      <main className="shared-main">
+        <div className="shared-card">
+          <div className="text-center" style={{ marginBottom: '1.5rem' }}>
+            <h1 style={{ fontSize: '1.25rem', fontWeight: 600, color: 'rgb(var(--text))', margin: '0 0 0.25rem' }}>{brain.name}</h1>
+            <span style={{ fontSize: '0.875rem', color: 'rgb(var(--muted))' }}>{brain.badge}</span>
           </div>
-          <p className="text-sm text-[rgb(var(--muted))] mb-6 text-center">
+          <p style={{ fontSize: '0.875rem', color: 'rgb(var(--muted))', margin: '0 0 1.5rem', textAlign: 'center' }}>
             You&apos;ve been invited to this brain. Sign in and join to open notes and handwritten scans.
           </p>
-          {joinError ? <p className="text-sm text-red-400 text-center mb-3">{joinError}</p> : null}
-          <div className="space-y-3">
-            <button
-              type="button"
-              onClick={handleJoin}
-              disabled={joining}
-              className="w-full py-3 px-4 rounded-lg bg-[rgb(var(--accent))] hover:bg-[rgb(var(--accentHover))] text-white font-medium transition-colors disabled:opacity-70"
-            >
+          {joinError ? (
+            <p style={{ fontSize: '0.875rem', color: 'var(--red)', textAlign: 'center', margin: '0 0 0.75rem' }}>{joinError}</p>
+          ) : null}
+          <div className="shared-actions">
+            <button type="button" onClick={handleJoin} disabled={joining} className="shared-btn-primary">
               {joining ? 'Joining…' : 'Join brain'}
             </button>
-            <button
-              type="button"
-              onClick={handleDownload}
-              disabled={downloading}
-              className="w-full py-3 px-4 rounded-lg border border-[rgb(var(--border))] text-[rgb(var(--text))] hover:bg-[rgb(var(--panel2))] font-medium transition-colors disabled:opacity-70"
-            >
+            <button type="button" onClick={handleDownload} disabled={downloading} className="shared-btn-outline">
               {downloading ? 'Downloading…' : 'Download invite JSON'}
             </button>
           </div>

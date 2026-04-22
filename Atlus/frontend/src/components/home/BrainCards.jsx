@@ -10,23 +10,26 @@ export default function BrainCards() {
   }
 
   return (
-    <div className="bg-[rgb(var(--panel))] border border-[rgb(var(--border))] rounded-xl p-4">
-      <h2 className="text-sm font-medium text-[rgb(var(--text))] mb-3">My Brains</h2>
-      <div className="space-y-2">
+    <div className="panel-rgb">
+      <h2 style={{ fontSize: '0.875rem', fontWeight: 500, color: 'rgb(var(--text))', margin: '0 0 0.75rem' }}>My Brains</h2>
+      <div>
         {MOCK_BRAINS.map((brain, i) => (
           <div
             key={i}
-            className="flex items-center justify-between gap-2 p-2 rounded-lg bg-[rgb(var(--panel2))] border border-[rgb(var(--border))]"
+            className="flex items-center justify-between gap-2"
+            style={{
+              padding: '0.5rem',
+              marginBottom: '0.5rem',
+              borderRadius: '0.5rem',
+              background: 'rgb(var(--panel2))',
+              border: '1px solid rgb(var(--border))',
+            }}
           >
             <div className="min-w-0">
-              <p className="text-sm text-[rgb(var(--text))] truncate">{brain.name}</p>
-              <span className="text-xs text-[rgb(var(--muted))]">{brain.badge}</span>
+              <p style={{ fontSize: '0.875rem', color: 'rgb(var(--text))', margin: 0 }} className="truncate">{brain.name}</p>
+              <span style={{ fontSize: '0.75rem', color: 'rgb(var(--muted))' }}>{brain.badge}</span>
             </div>
-            <button
-              type="button"
-              onClick={handleOpen}
-              className="shrink-0 py-1 px-2 rounded text-xs bg-[rgb(var(--accent))] hover:bg-[rgb(var(--accentHover))] text-white transition-colors"
-            >
+            <button type="button" onClick={handleOpen} className="btn btn-primary btn-xs shrink-0">
               Open
             </button>
           </div>

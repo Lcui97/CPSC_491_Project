@@ -20,15 +20,15 @@ This is your first note. You can write in **Markdown** and keep ideas organized.
 
 ## Notes
 - Edit in the editor; use **Edit** / **Preview** / **Split**.
-- Related notes and sources appear in the **Context** panel on the right.
+- Sources for this brain appear in the **Context** panel on the right.
 
 ## Scans
 - After OCR, open the note to see the original image beside the transcript.""",
     """# Example links and tags
 
-Add `tags` to notes (e.g. `#concept`, `#todo`) and explore **Related** in the context panel.
+Add `tags` to notes (e.g. `#concept`, `#todo`) to keep topics organized.
 
-Reference other notes by title; semantic matches can appear as related ideas.""",
+Reference other notes by title in your own words.""",
 ]
 
 
@@ -45,10 +45,8 @@ def ensure_seed_nodes(brain_id: str) -> int:
         db.session.commit()
         return 0
     created = 0
-    node_ids_ordered = []
     for title, content in zip(SEED_TITLES, SEED_CONTENT):
         node_id = str(uuid.uuid4())
-        node_ids_ordered.append(node_id)
         node = Node(
             id=node_id,
             brain_id=brain_id,
@@ -56,15 +54,10 @@ def ensure_seed_nodes(brain_id: str) -> int:
             markdown_content=content,
             tags=["seed", "example"],
             node_type="seed",
-            related_node_ids=[],
+            related_node_ids=None,
         )
         db.session.add(node)
         created += 1
-    db.session.flush()
-    for j in range(len(node_ids_ordered) - 1):
-        n = Node.query.get(node_ids_ordered[j])
-        if n:
-            n.related_node_ids = [node_ids_ordered[j + 1]]
     brain.seed_nodes_created = True
     db.session.commit()
     return created

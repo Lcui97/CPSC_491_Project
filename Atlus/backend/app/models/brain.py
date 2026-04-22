@@ -1,4 +1,4 @@
-"""ORM models for workspaces (brains), uploaded files, notes, links, sharing, and calendar rows."""
+"""ORM models for workspaces (brains), uploaded files, notes, sharing, and calendar rows."""
 from app.extensions import db
 
 
@@ -16,6 +16,7 @@ class Brain(db.Model):
     nodes = db.relationship("Node", backref="brain", lazy="dynamic", cascade="all, delete-orphan")
     source_files = db.relationship("SourceFile", backref="brain", lazy="dynamic", cascade="all, delete-orphan")
     calendar_events = db.relationship("CalendarEvent", backref="brain", lazy="dynamic", cascade="all, delete-orphan")
+    class_profile = db.relationship("CourseProfile", backref="brain", uselist=False, cascade="all, delete-orphan")
 
 
 class SourceFile(db.Model):
@@ -56,6 +57,24 @@ class CalendarEvent(db.Model):
     updated_at = db.Column(db.DateTime(timezone=True), server_default=db.func.now(), onupdate=db.func.now())
 
 
+class CourseProfile(db.Model):
+    """Canvas-like class metadata extracted from syllabus or entered manually."""
+    __tablename__ = "course_profiles"
+
+    id = db.Column(db.Integer, primary_key=True)
+    brain_id = db.Column(db.String(64), db.ForeignKey("brains.id"), nullable=False, unique=True, index=True)
+    professor = db.Column(db.String(255), nullable=True)
+    class_number = db.Column(db.String(64), nullable=True)
+    section = db.Column(db.String(64), nullable=True)
+    meeting_days = db.Column(db.String(128), nullable=True)
+    meeting_time = db.Column(db.String(128), nullable=True)
+    classroom = db.Column(db.String(128), nullable=True)
+    office_hours = db.Column(db.String(255), nullable=True)
+    term = db.Column(db.String(128), nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), server_default=db.func.now())
+    updated_at = db.Column(db.DateTime(timezone=True), server_default=db.func.now(), onupdate=db.func.now())
+
+
 class Node(db.Model):
     """A note or an auto-generated chunk from a textbook — title, markdown body, tags."""
     __tablename__ = "nodes"
@@ -76,27 +95,7 @@ class Node(db.Model):
     metadata_json = db.Column(db.JSON, nullable=True)
     created_at = db.Column(db.DateTime(timezone=True), server_default=db.func.now())
     updated_at = db.Column(db.DateTime(timezone=True), server_default=db.func.now(), onupdate=db.func.now())
-    related_node_ids = db.Column(db.JSON, nullable=True)
-
-
-class NodeRelationship(db.Model):
-    """Directed link between two notes (optional type + strength)."""
-    __tablename__ = "node_relationships"
-
-    id = db.Column(db.Integer, primary_key=True)
-    source_node_id = db.Column(db.String(64), db.ForeignKey("nodes.id"), nullable=False, index=True)
-    target_node_id = db.Column(db.String(64), db.ForeignKey("nodes.id"), nullable=False, index=True)
-    edge_type = db.Column(db.String(64), nullable=True)
-    weight = db.Column(db.Float, nullable=True)
-    similarity_score = db.Column(db.Float, nullable=True)  # old field, still on some rows
-    created_at = db.Column(db.DateTime(timezone=True), server_default=db.func.now())
-
-    source_node = db.relationship("Node", foreign_keys=[source_node_id])
-    target_node = db.relationship("Node", foreign_keys=[target_node_id])
-
-    __table_args__ = (
-        db.UniqueConstraint("source_node_id", "target_node_id", name="uq_node_relationship"),
-    )
+    related_node_ids = db.Column(db.JSON, nullable=True)  # legacy; unused
 
 
 class BrainShareLink(db.Model):

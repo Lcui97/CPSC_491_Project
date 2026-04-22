@@ -6,14 +6,14 @@ const MOCK_ITEMS = [
 
 export default function RecentActivity() {
   return (
-    <div className="bg-[rgb(var(--panel))] border border-[rgb(var(--border))] rounded-xl p-4">
-      <h2 className="text-sm font-medium text-[rgb(var(--text))] mb-3">Recent Activity</h2>
-      <ul className="space-y-2">
+    <div className="panel-rgb">
+      <h2 style={{ fontSize: '0.875rem', fontWeight: 500, color: 'rgb(var(--text))', margin: '0 0 0.75rem' }}>Recent Activity</h2>
+      <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
         {MOCK_ITEMS.map((item, i) => (
-          <li key={i} className="flex items-center gap-2 text-sm">
-            <span className="w-2 h-2 rounded-full bg-[rgb(var(--accent))] shrink-0" />
-            <span className="text-[rgb(var(--text))] flex-1">{item.label}</span>
-            <span className="text-[rgb(var(--muted))] text-xs">{item.time}</span>
+          <li key={i} className="flex items-center gap-2" style={{ fontSize: '0.875rem', marginBottom: '0.5rem' }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'rgb(var(--accent))', flexShrink: 0 }} />
+            <span style={{ color: 'rgb(var(--text))', flex: 1 }}>{item.label}</span>
+            <span style={{ color: 'rgb(var(--muted))', fontSize: '0.75rem' }}>{item.time}</span>
           </li>
         ))}
       </ul>

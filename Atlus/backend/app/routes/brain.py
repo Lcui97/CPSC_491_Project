@@ -1,14 +1,17 @@
-"""Brain routes: workspaces, uploads, OCR, syllabus, calendar, notes, graph, search, ask."""
+"""Brain routes: workspaces, uploads, OCR, syllabus, calendar, notes, search, ask."""
 
+import mimetypes
 import os
+import re
 import uuid
 import threading
-from collections import defaultdict
 from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
 from io import BytesIO
 from pathlib import Path
 
 from flask import Blueprint, request, jsonify, current_app, send_file
+from sqlalchemy import or_
 from flask_jwt_extended import get_jwt_identity, jwt_required
 from werkzeug.datastructures import FileStorage
 
@@ -18,8 +21,8 @@ from app.models.brain import (
     BrainCollaborator,
     BrainShareLink,
     CalendarEvent,
+    CourseProfile,
     Node,
-    NodeRelationship,
     SourceFile,
 )
 from app.models.user import User
@@ -39,6 +42,67 @@ def _get_user_or_404():
     return user
 
 
+def _classes_assistant_notes_section(brain_map: dict, brain_ids: list, *, max_chars: int = 12000, per_note_cap: int = 3200) -> str:
+    """Recent user notes / scans / textbook chunks across all class brains (excludes syllabus nodes)."""
+    rows = (
+        Node.query.filter(Node.brain_id.in_(brain_ids))
+        .filter(
+            or_(
+                Node.node_type.in_(("note", "handwritten", "textbook_section")),
+                Node.node_type.is_(None),
+            )
+        )
+        .order_by(Node.updated_at.desc().nullslast(), Node.created_at.desc())
+        .limit(100)
+        .all()
+    )
+    parts: list[str] = []
+    total = 0
+    sep = "\n\n---\n\n"
+    for n in rows:
+        body = (n.markdown_content or n.raw_content or "").strip()
+        if not body:
+            continue
+        b = brain_map.get(n.brain_id)
+        course = b.name if b else str(n.brain_id)
+        title = (n.title or "Untitled").strip()
+        chunk = f"### {course} — {title}\n{body[:per_note_cap]}"
+        add_len = len(chunk) + (len(sep) if parts else 0)
+        if total + add_len > max_chars:
+            break
+        parts.append(chunk)
+        total += add_len
+    if not parts:
+        return "No notes yet — only syllabus and calendar data above apply."
+    return "\n\n---\n\n".join(parts)
+
+
+def _datetime_anchor_block(now_utc=None) -> str:
+    """Private context for the model: current moment for interpreting 'today' / 'this week'. Not for user-facing copy."""
+    if now_utc is None:
+        now_utc = datetime.now(timezone.utc)
+    tz_name = (os.environ.get("ATLUS_TIMEZONE") or "UTC").strip() or "UTC"
+    try:
+        tz = ZoneInfo(tz_name)
+    except Exception:
+        tz_name = "UTC"
+        tz = ZoneInfo("UTC")
+    local = now_utc.astimezone(tz)
+    iso_year, iso_week, _ = local.isocalendar()
+    lines = [
+        "[INTERNAL_REFERENCE — do not quote, summarize, or reproduce this block in your reply unless the user explicitly asks what time or date it is right now.]",
+        'Use only for interpreting phrases like "today", "this week", "tomorrow", and "next Monday".',
+        "Do not assume the current term starts in January (or any month) just because the syllabus says so — compare syllabus dates to the actual calendar facts below.",
+        f"- Reference timezone: {tz_name} (env ATLUS_TIMEZONE).",
+        f"- Now (local): {local.strftime('%A, %B %d, %Y at %H:%M (%Z)')}",
+        f"- ISO (local): {local.isoformat(timespec='minutes')}",
+        f"- Same instant (UTC): {now_utc.strftime('%Y-%m-%d %H:%M:%S')} UTC",
+        f"- ISO week: {iso_year}-W{iso_week:02d} (weeks start Monday).",
+        "",
+    ]
+    return "\n".join(lines)
+
+
 def _brain_for_user(brain_id, user_id):
     """Return brain if user owns it or is a collaborator."""
     brain = Brain.query.filter_by(id=brain_id).first()
@@ -55,6 +119,20 @@ def _upload_root():
     return Path(current_app.root_path).parent / current_app.config.get("UPLOAD_FOLDER", "uploads")
 
 
+def _persist_upload_bytes(brain_id: str, filename: str, data: bytes) -> str:
+    """Save uploaded bytes under uploads/<brain_id>/ and return relative path."""
+    upload_root = _upload_root()
+    brain_dir = upload_root / brain_id
+    brain_dir.mkdir(parents=True, exist_ok=True)
+    safe_name = Path(filename or "upload.bin").name
+    ext = Path(safe_name).suffix or ".bin"
+    stored = f"{uuid.uuid4().hex}{ext}"
+    disk_path = brain_dir / stored
+    with open(disk_path, "wb") as f:
+        f.write(data)
+    return str(Path(brain_id) / stored)
+
+
 def _event_to_json(e: CalendarEvent):
     return {
         "id": e.id,
@@ -69,6 +147,98 @@ def _event_to_json(e: CalendarEvent):
         "created_at": e.created_at.isoformat() if e.created_at else None,
         "updated_at": e.updated_at.isoformat() if e.updated_at else None,
     }
+
+
+def _profile_to_json(profile: CourseProfile | None):
+    if not profile:
+        return None
+    return {
+        "professor": profile.professor,
+        "class_number": profile.class_number,
+        "section": profile.section,
+        "meeting_days": profile.meeting_days,
+        "meeting_time": profile.meeting_time,
+        "classroom": profile.classroom,
+        "office_hours": profile.office_hours,
+        "term": profile.term,
+    }
+
+
+def _class_title_for_brain(brain: Brain, profile: CourseProfile | None):
+    if brain and brain.name:
+        return brain.name
+    if profile and profile.class_number:
+        return profile.class_number
+    return "Untitled Class"
+
+
+def _class_to_json(brain: Brain, profile: CourseProfile | None, event_count: int = 0):
+    return {
+        "id": brain.id,
+        "title": _class_title_for_brain(brain, profile),
+        "created_at": brain.created_at.isoformat() if brain.created_at else None,
+        "profile": _profile_to_json(profile),
+        "event_count": int(event_count or 0),
+    }
+
+
+def _extract_syllabus_sections(text: str):
+    """Lightweight section extraction for syllabus preview cards."""
+    raw = (text or "").strip()
+    if not raw:
+        return []
+
+    patterns = [
+        ("Course info", r"(course description|catalog description|instructor|professor|office hours|meeting|location)"),
+        ("Grading", r"(grading|grade breakdown|points|weights|assessment|rubric)"),
+        ("Policies", r"(policy|attendance|late work|academic integrity|plagiarism|conduct|accommodation)"),
+        ("Schedule / Weekly plan", r"(schedule|calendar|week \d+|tentative|topics|lecture plan)"),
+    ]
+
+    lines = [ln.rstrip() for ln in raw.splitlines()]
+    sections = []
+    for title, pat in patterns:
+        regex = re.compile(pat, re.IGNORECASE)
+        idx = next((i for i, ln in enumerate(lines) if regex.search(ln)), None)
+        if idx is None:
+            continue
+        chunk = "\n".join(lines[idx : min(len(lines), idx + 22)]).strip()
+        if chunk:
+            sections.append({"title": title, "content": chunk[:4000]})
+
+    if not sections:
+        sections.append({"title": "Syllabus excerpt", "content": raw[:6000]})
+    return sections
+
+
+def _syllabus_node_markdown(text: str):
+    """Best-effort LLM formatting; always falls back to extracted text."""
+    source = (text or "").strip()
+    if not source:
+        return ""
+    try:
+        from app.services.openai_service import format_syllabus_markdown
+
+        formatted = (format_syllabus_markdown(source) or "").strip()
+        return formatted or source
+    except Exception:
+        return source
+
+
+def _upsert_course_profile(brain_id: str, data: dict):
+    profile = CourseProfile.query.filter_by(brain_id=brain_id).first()
+    if not profile:
+        profile = CourseProfile(brain_id=brain_id)
+        db.session.add(profile)
+    profile.professor = (data.get("professor") or "").strip()[:255] or None
+    profile.class_number = (data.get("class_number") or "").strip()[:64] or None
+    profile.section = (data.get("section") or "").strip()[:64] or None
+    profile.meeting_days = (data.get("meeting_days") or "").strip()[:128] or None
+    profile.meeting_time = (data.get("meeting_time") or "").strip()[:128] or None
+    profile.classroom = (data.get("classroom") or "").strip()[:128] or None
+    profile.office_hours = (data.get("office_hours") or "").strip()[:255] or None
+    profile.term = (data.get("term") or "").strip()[:128] or None
+    return profile
 
 
 def _parse_datetime_value(value):
@@ -208,15 +378,39 @@ def ingest():
 
     brain_id_copy = brain_id
     user_id_copy = user.id
+    uri = (current_app.config.get("SQLALCHEMY_DATABASE_URI") or "").lower()
+
+    if "sqlite" in uri:
+        try:
+            from app.services.ingestion_pipeline import ingest_documents
+
+            result = ingest_documents(brain_id_copy, user_id_copy, file_payloads)
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.exception("ingest_documents failed (sqlite)")
+            return jsonify({"error": str(e), "processing": False}), 500
+
+        return jsonify(
+            {
+                "processing": False,
+                "files_count": len(file_payloads),
+                "nodes_created": result.get("nodes_created", 0),
+                "links_created": result.get("links_created", 0),
+                "errors": result.get("errors", []),
+            }
+        ), 200
+
     app = current_app._get_current_object()
 
     def ingest_in_background():
         with app.app_context():
             try:
                 from app.services.ingestion_pipeline import ingest_documents
+
                 ingest_documents(brain_id_copy, user_id_copy, file_payloads)
             except Exception:
                 db.session.rollback()
+                current_app.logger.exception("ingest_documents failed (background)")
 
     threading.Thread(target=ingest_in_background, daemon=True).start()
 
@@ -253,28 +447,34 @@ def ocr():
             return jsonify({"error": "empty file"}), 400
 
         ext = os.path.splitext((file.filename or "").lower())[-1]
-        allowed_img = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
+        allowed_img = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff"}
         is_pdf = ext == ".pdf"
         source_file_id = None
 
-        if not is_pdf and ext in allowed_img:
+        def _persist_scan(file_bytes: bytes, display_name: str, disk_ext: str, file_type: str):
+            nonlocal source_file_id
             upload_root = _upload_root()
             brain_dir = upload_root / brain_id
             brain_dir.mkdir(parents=True, exist_ok=True)
             uid = str(uuid.uuid4())
-            fname = f"{uid}{ext}"
+            fname = f"{uid}{disk_ext}"
             full_path = brain_dir / fname
-            full_path.write_bytes(data)
+            full_path.write_bytes(file_bytes)
             rel = f"{brain_id}/{fname}"
             sf = SourceFile(
                 brain_id=brain_id,
-                filename=file.filename or "scan.png",
-                file_type="image",
+                filename=display_name,
+                file_type=file_type,
                 storage_path=rel,
             )
             db.session.add(sf)
             db.session.commit()
             source_file_id = sf.id
+
+        if is_pdf:
+            _persist_scan(data, file.filename or "scan.pdf", ".pdf", "pdf")
+        elif ext in allowed_img:
+            _persist_scan(data, file.filename or "scan.png", ext, "image")
 
         bio = BytesIO(data)
         bio.seek(0)
@@ -306,7 +506,14 @@ def serve_source_file(brain_id, source_id):
     path = _upload_root() / src.storage_path
     if not path.is_file():
         return jsonify({"error": "file missing on disk"}), 404
-    return send_file(path, as_attachment=False, download_name=src.filename or "scan.png")
+    guessed, _ = mimetypes.guess_type(str(path))
+    if src.file_type == "pdf":
+        mime = guessed or "application/pdf"
+    elif src.file_type == "image":
+        mime = guessed or "image/jpeg"
+    else:
+        mime = guessed or "application/octet-stream"
+    return send_file(path, mimetype=mime, as_attachment=False, download_name=src.filename or "scan.png")
 
 
 # Turn chunks or a single markdown blob into nodes (embeddings + DB rows).
@@ -429,16 +636,6 @@ def delete_brain(brain_id):
     if brain.user_id != user.id:
         return jsonify({"error": "only the brain owner can delete it"}), 403
 
-    from sqlalchemy import or_
-
-    node_ids = [n.id for n in Node.query.filter_by(brain_id=brain_id).all()]
-    if node_ids:
-        NodeRelationship.query.filter(
-            or_(
-                NodeRelationship.source_node_id.in_(node_ids),
-                NodeRelationship.target_node_id.in_(node_ids),
-            )
-        ).delete(synchronize_session=False)
     Node.query.filter_by(brain_id=brain_id).delete(synchronize_session=False)
 
     upload_root = _upload_root()
@@ -609,15 +806,30 @@ def upload_syllabus():
         text = syllabus_text_from_file(file.filename, data)
         if not text.strip():
             return jsonify({"error": "unable to extract text from syllabus"}), 400
+        formatted_markdown = _syllabus_node_markdown(text)
 
         source_file = SourceFile(
             brain_id=brain_id,
             filename=file.filename,
             file_type="syllabus",
-            storage_path=None,
+            storage_path=_persist_upload_bytes(brain_id, file.filename, data),
         )
         db.session.add(source_file)
         db.session.flush()
+
+        # Keep full extracted syllabus text as a note node for richer assistant context.
+        db.session.add(
+            Node(
+                id=str(uuid.uuid4()),
+                brain_id=brain_id,
+                source_file_id=source_file.id,
+                title=f"Syllabus: {file.filename}",
+                markdown_content=formatted_markdown[:200000],
+                raw_content=text[:200000],
+                node_type="syllabus",
+                tags=["syllabus"],
+            )
+        )
 
         extracted = extract_calendar_events(text)
         saved = []
@@ -645,6 +857,313 @@ def upload_syllabus():
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
+
+
+# List all classes (brains) with class metadata + event counts.
+@bp.route("/classes", methods=["GET"])
+@jwt_required()
+def list_classes():
+    user = _get_user_or_404()
+    if not user:
+        return jsonify({"error": "user not found"}), 404
+
+    brains = Brain.query.filter_by(user_id=user.id).order_by(Brain.created_at.desc()).all()
+    brain_ids = [b.id for b in brains]
+    profiles = CourseProfile.query.filter(CourseProfile.brain_id.in_(brain_ids)).all() if brain_ids else []
+    profile_map = {p.brain_id: p for p in profiles}
+
+    count_map = {}
+    if brain_ids:
+        from sqlalchemy import func
+        rows = (
+            db.session.query(CalendarEvent.brain_id, func.count(CalendarEvent.id))
+            .filter(CalendarEvent.brain_id.in_(brain_ids))
+            .group_by(CalendarEvent.brain_id)
+            .all()
+        )
+        count_map = {brain_id: count for brain_id, count in rows}
+
+    classes = [_class_to_json(b, profile_map.get(b.id), count_map.get(b.id, 0)) for b in brains]
+    return jsonify({"classes": classes}), 200
+
+
+# Create class manually (without syllabus).
+@bp.route("/classes/manual", methods=["POST"])
+@jwt_required()
+def create_class_manual():
+    user = _get_user_or_404()
+    if not user:
+        return jsonify({"error": "user not found"}), 404
+
+    data = request.get_json() or {}
+    title = (data.get("title") or "").strip()
+    if not title:
+        class_number = (data.get("class_number") or "").strip()
+        title = class_number or "New Class"
+
+    brain = Brain(id=str(uuid.uuid4()), name=title[:255], badge="Class", user_id=user.id)
+    db.session.add(brain)
+    profile = _upsert_course_profile(brain.id, data)
+    db.session.commit()
+
+    return jsonify({"class": _class_to_json(brain, profile, 0)}), 201
+
+
+# Edit class metadata/title manually.
+@bp.route("/classes/<brain_id>", methods=["PUT"])
+@jwt_required()
+def update_class(brain_id):
+    user = _get_user_or_404()
+    if not user:
+        return jsonify({"error": "user not found"}), 404
+    brain = _brain_for_user(brain_id, user.id)
+    if not brain:
+        return jsonify({"error": "class not found"}), 404
+
+    data = request.get_json() or {}
+    new_title = (data.get("title") or "").strip()
+    if new_title:
+        brain.name = new_title[:255]
+
+    profile = _upsert_course_profile(brain.id, data)
+    db.session.commit()
+
+    event_count = CalendarEvent.query.filter_by(brain_id=brain.id).count()
+    return jsonify({"class": _class_to_json(brain, profile, event_count)}), 200
+
+
+# Create class from syllabus upload; auto-extract profile + events.
+@bp.route("/classes/syllabus", methods=["POST"])
+@jwt_required()
+def create_class_from_syllabus():
+    user = _get_user_or_404()
+    if not user:
+        return jsonify({"error": "user not found"}), 404
+
+    file = request.files.get("file")
+    if not file or not file.filename:
+        return jsonify({"error": "file required"}), 400
+
+    try:
+        from app.services.syllabus_calendar import syllabus_text_from_file, extract_calendar_events
+        from app.services.syllabus_profile import extract_syllabus_profile
+
+        data = file.read()
+        if not data:
+            return jsonify({"error": "empty file"}), 400
+        text = syllabus_text_from_file(file.filename, data)
+        if not text.strip():
+            return jsonify({"error": "unable to extract text from syllabus"}), 400
+        formatted_markdown = _syllabus_node_markdown(text)
+
+        profile_data = extract_syllabus_profile(text)
+        title = (
+            profile_data.get("class_title")
+            or profile_data.get("class_number")
+            or Path(file.filename).stem
+            or "New Class"
+        )
+
+        brain = Brain(id=str(uuid.uuid4()), name=title[:255], badge="Class", user_id=user.id)
+        db.session.add(brain)
+        profile = _upsert_course_profile(brain.id, profile_data)
+        db.session.flush()
+
+        source_file = SourceFile(
+            brain_id=brain.id,
+            filename=file.filename,
+            file_type="syllabus",
+            storage_path=_persist_upload_bytes(brain.id, file.filename, data),
+        )
+        db.session.add(source_file)
+        db.session.flush()
+
+        db.session.add(
+            Node(
+                id=str(uuid.uuid4()),
+                brain_id=brain.id,
+                source_file_id=source_file.id,
+                title=f"Syllabus: {file.filename}",
+                markdown_content=formatted_markdown[:200000],
+                raw_content=text[:200000],
+                node_type="syllabus",
+                tags=["syllabus"],
+            )
+        )
+
+        extracted = extract_calendar_events(text)
+        saved = []
+        fallback_course = profile.class_number or brain.name
+        for item in extracted:
+            ev = CalendarEvent(
+                brain_id=brain.id,
+                source_file_id=source_file.id,
+                title=item.get("title") or "Untitled event",
+                event_type=(item.get("event_type") or "other").lower(),
+                due_at=item.get("due_at"),
+                course_label=item.get("course_label") or fallback_course,
+                confidence=item.get("confidence"),
+                notes=item.get("notes"),
+            )
+            db.session.add(ev)
+            saved.append(ev)
+
+        db.session.commit()
+        return jsonify(
+            {
+                "class": _class_to_json(brain, profile, len(saved)),
+                "events": [_event_to_json(e) for e in saved],
+                "count": len(saved),
+            }
+        ), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+
+# Preview extracted syllabus sections for one class.
+@bp.route("/classes/<brain_id>/syllabus-preview", methods=["GET"])
+@jwt_required()
+def class_syllabus_preview(brain_id):
+    user = _get_user_or_404()
+    if not user:
+        return jsonify({"error": "user not found"}), 404
+    brain = _brain_for_user(brain_id, user.id)
+    if not brain:
+        return jsonify({"error": "class not found"}), 404
+
+    node = (
+        Node.query.filter_by(brain_id=brain_id, node_type="syllabus")
+        .order_by(Node.created_at.desc())
+        .first()
+    )
+    if not node:
+        return jsonify({"sections": [], "has_syllabus": False}), 200
+
+    text = (node.markdown_content or node.raw_content or "").strip()
+    sections = _extract_syllabus_sections(text)
+
+    source = SourceFile.query.filter_by(id=node.source_file_id, brain_id=brain_id).first() if node.source_file_id else None
+    file_path = f"/api/brain/{brain_id}/sources/{source.id}/file" if source and source.storage_path else None
+
+    return jsonify(
+        {
+            "has_syllabus": True,
+            "source": {
+                "id": source.id if source else None,
+                "filename": source.filename if source else None,
+                "file_path": file_path,
+            },
+            "sections": sections,
+        }
+    ), 200
+
+
+# Ask across classes (all brains) using notes + class calendar context.
+@bp.route("/classes/assistant", methods=["POST"])
+@jwt_required()
+def classes_assistant():
+    user = _get_user_or_404()
+    if not user:
+        return jsonify({"error": "user not found"}), 404
+    data = request.get_json() or {}
+    prompt = (data.get("prompt") or "").strip()
+    if not prompt:
+        return jsonify({"error": "prompt required"}), 400
+
+    brains = Brain.query.filter_by(user_id=user.id).all()
+    brain_ids = [b.id for b in brains]
+    if not brain_ids:
+        return jsonify({"response": "No classes yet. Add one manually or upload a syllabus first."}), 200
+
+    now_utc = datetime.now(timezone.utc)
+    window_end = now_utc + timedelta(days=14)
+    events = (
+        CalendarEvent.query.filter(CalendarEvent.brain_id.in_(brain_ids))
+        .filter(CalendarEvent.due_at >= now_utc - timedelta(days=7))
+        .filter(CalendarEvent.due_at <= window_end)
+        .order_by(CalendarEvent.due_at.asc())
+        .all()
+    )
+    profiles = CourseProfile.query.filter(CourseProfile.brain_id.in_(brain_ids)).all()
+    profile_map = {p.brain_id: p for p in profiles}
+    brain_map = {b.id: b for b in brains}
+
+    event_lines = []
+    for e in events:
+        b = brain_map.get(e.brain_id)
+        p = profile_map.get(e.brain_id)
+        course = (p.class_number if p else None) or (b.name if b else e.course_label) or "Unknown class"
+        event_lines.append(f"- {course}: [{e.event_type}] {e.title} on {e.due_at.isoformat()}")
+    profile_lines = []
+    for b in brains:
+        p = profile_map.get(b.id)
+        if not p:
+            continue
+        profile_lines.append(
+            f"- {b.name}: professor={p.professor or 'n/a'}, section={p.section or 'n/a'}, "
+            f"meets={p.meeting_days or 'n/a'} {p.meeting_time or ''}, room={p.classroom or 'n/a'}, office_hours={p.office_hours or 'n/a'}"
+        )
+
+    # Include syllabus text snippets so assistant can answer class-detail questions.
+    syllabus_nodes = (
+        Node.query.filter(Node.brain_id.in_(brain_ids))
+        .filter(Node.node_type == "syllabus")
+        .order_by(Node.created_at.desc())
+        .limit(30)
+        .all()
+    )
+    syllabus_lines = []
+    for n in syllabus_nodes:
+        b = brain_map.get(n.brain_id)
+        course = b.name if b else n.brain_id
+        text = (n.markdown_content or n.raw_content or "").strip()
+        if text:
+            syllabus_lines.append(f"### {course}\n{text[:6000]}")
+
+    notes_section = _classes_assistant_notes_section(brain_map, brain_ids)
+
+    context = (
+        _datetime_anchor_block(now_utc)
+        + "## Classes\n"
+        + ("\n".join(profile_lines) if profile_lines else "No class metadata.")
+        + "\n\n## Upcoming Events\n"
+        + ("\n".join(event_lines) if event_lines else "No upcoming events in the next 2 weeks.")
+        + "\n\n## Your notes (recent across classes)\n"
+        + notes_section
+        + "\n\n## Syllabus Content\n"
+        + ("\n\n---\n\n".join(syllabus_lines) if syllabus_lines else "No syllabus text available.")
+    )
+    try:
+        from app.services.openai_service import ask_brain as llm_ask_brain
+        response_text = llm_ask_brain(
+            context,
+            (
+                "You are a class planning assistant. Answer using class metadata, calendar events, "
+                "the user's recent notes from all classes, and syllabus text when relevant. "
+                "The context may begin with an INTERNAL_REFERENCE datetime block: use it only for reasoning about "
+                '"today" or relative dates — never paste, echo, or open your answer with that block or a duplicate "today\'s date" section. '
+                "If asked about this week/next week, group events by calendar week in the reference timezone. "
+                f"User question: {prompt}"
+            ),
+            "custom",
+        )
+        return jsonify({"response": response_text}), 200
+    except Exception:
+        low = prompt.lower()
+        if "quiz" in low or "test" in low or "exam" in low:
+            filtered = [e for e in events if e.event_type in {"quiz", "test", "midterm", "final"}]
+        else:
+            filtered = events
+        if not filtered:
+            return jsonify({"response": "I could not find matching upcoming events in your class calendars."}), 200
+        lines = []
+        for e in filtered[:20]:
+            b = brain_map.get(e.brain_id)
+            p = profile_map.get(e.brain_id)
+            course = (p.class_number if p else None) or (b.name if b else e.course_label) or "Unknown class"
+            lines.append(f"- {course}: [{e.event_type}] {e.title} on {e.due_at.strftime('%a %b %d, %Y %I:%M %p')}")
+        return jsonify({"response": "Here are your upcoming items:\n" + "\n".join(lines)}), 200
 
 
 # Filter calendar events for one brain (optional date range + type).
@@ -873,6 +1392,7 @@ def ask_brain_route(brain_id):
 
     try:
         from app.services.openai_service import ask_brain as llm_ask_brain
+        anchor = _datetime_anchor_block(now_utc)
         full_context = context_text
         if event_context.strip():
             full_context = (
@@ -880,6 +1400,7 @@ def ask_brain_route(brain_id):
                 if context_text.strip()
                 else f"## Calendar Events\n\n{event_context}"
             )
+        full_context = f"{anchor}\n{full_context}".strip()
         if response_intent == "study_for_upcoming" and not prompt:
             prompt = "Help me study for my upcoming assessments based on the notes and calendar."
         elif time_scope == "last_2_weeks" and not prompt:
@@ -1033,7 +1554,6 @@ def _node_to_json(n):
         "summary": n.summary,
         "created_at": n.created_at.isoformat() if n.created_at else None,
         "updated_at": n.updated_at.isoformat() if n.updated_at else None,
-        "related_node_ids": n.related_node_ids or [],
     }
 
 
@@ -1081,17 +1601,11 @@ def update_node(node_id):
     except Exception:
         pass
     db.session.commit()
-    try:
-        from app.services.node_generation import relink_user_note
-
-        relink_user_note(node_id, node.brain_id)
-    except Exception:
-        pass
     db.session.refresh(node)
     return jsonify(_node_to_json(node)), 200
 
 
-# Delete note, strip graph edges, drop vectors.
+# Delete note; best-effort cleanup of legacy Pinecone rows if any.
 @bp.route("/nodes/<node_id>", methods=["DELETE"])
 @jwt_required()
 def delete_node(node_id):
@@ -1104,16 +1618,6 @@ def delete_node(node_id):
 
     brain_id = node.brain_id
 
-    NodeRelationship.query.filter(
-        (NodeRelationship.source_node_id == node_id) | (NodeRelationship.target_node_id == node_id)
-    ).delete(synchronize_session=False)
-
-    others = Node.query.filter_by(brain_id=brain_id).all()
-    for n in others:
-        rel = n.related_node_ids or []
-        if node_id in rel:
-            n.related_node_ids = [x for x in rel if x != node_id]
-
     try:
         from app.services.pinecone_service import delete_vectors
 
@@ -1125,235 +1629,3 @@ def delete_node(node_id):
     db.session.delete(node)
     db.session.commit()
     return jsonify({"ok": True, "id": node_id, "brain_id": brain_id}), 200
-
-
-# Who points at this note (reverse relationships).
-@bp.route("/nodes/<node_id>/backlinks", methods=["GET"])
-@jwt_required()
-def get_backlinks(node_id):
-    user = _get_user_or_404()
-    if not user:
-        return jsonify({"error": "user not found"}), 404
-    node = _node_for_user(node_id, user.id)
-    if not node:
-        return jsonify({"error": "node not found"}), 404
-
-    backlink_edges = NodeRelationship.query.filter_by(target_node_id=node_id).all()
-    source_ids = list({e.source_node_id for e in backlink_edges})
-    nodes = Node.query.filter(Node.id.in_(source_ids)).all() if source_ids else []
-    node_map = {n.id: n for n in nodes}
-    return jsonify({
-        "backlinks": [
-            {"id": nid, "title": node_map[nid].title, "tags": node_map[nid].tags or []}
-            for nid in source_ids if nid in node_map
-        ]
-    }), 200
-
-
-# Related notes: explicit graph, stored similar-ids, then vector search if available.
-@bp.route("/nodes/<node_id>/related", methods=["GET"])
-@jwt_required()
-def get_related(node_id):
-    user = _get_user_or_404()
-    if not user:
-        return jsonify({"error": "user not found"}), 404
-    node = _node_for_user(node_id, user.id)
-    if not node:
-        return jsonify({"error": "node not found"}), 404
-
-    out_edges = NodeRelationship.query.filter_by(source_node_id=node_id).all()
-    in_edges = NodeRelationship.query.filter_by(target_node_id=node_id).all()
-    neighbor_ids = set()
-    for e in out_edges:
-        neighbor_ids.add(e.target_node_id)
-    for e in in_edges:
-        neighbor_ids.add(e.source_node_id)
-    neighbor_ids.discard(node_id)
-
-    related = []
-    if neighbor_ids:
-        neighbors = Node.query.filter(Node.id.in_(list(neighbor_ids))).all()
-        for n in neighbors:
-            related.append({
-                "id": n.id,
-                "title": n.title,
-                "tags": n.tags or [],
-                "similarity": 0.86,
-                "source": "graph",
-            })
-
-    related_node_ids = set(node.related_node_ids or [])
-    related_node_ids.discard(node_id)
-    for nid in related_node_ids:
-        if nid in [r["id"] for r in related]:
-            continue
-        n = Node.query.get(nid)
-        if n:
-            related.append({
-                "id": n.id,
-                "title": n.title,
-                "tags": n.tags or [],
-                "similarity": 0.78,
-                "source": "similarity",
-            })
-
-    try:
-        from app.services.pinecone_service import similarity_search
-        from app.services.openai_service import get_embedding
-        if node.embedding_id:
-            emb = get_embedding((node.title or "") + "\n" + (node.markdown_content or node.raw_content or "")[:2000])
-            similar = similarity_search(node.brain_id, emb, top_k=5, threshold=0.7, exclude_ids=[node_id])
-            for s in similar:
-                n = Node.query.get(s["id"])
-                if n and not any(r["id"] == n.id for r in related):
-                    sc = float(s.get("score") or 0)
-                    related.append({
-                        "id": n.id,
-                        "title": n.title,
-                        "tags": n.tags or [],
-                        "similarity": sc,
-                        "source": "semantic",
-                    })
-    except Exception:
-        pass
-
-    return jsonify({"related": related}), 200
-
-
-# Full graph payload for one brain (client can cache).
-@bp.route("/brain/<brain_id>/graph", methods=["GET"])
-@jwt_required()
-def get_brain_graph(brain_id):
-    user = _get_user_or_404()
-    if not user:
-        return jsonify({"error": "user not found"}), 404
-    brain = _brain_for_user(brain_id, user.id)
-    if not brain:
-        return jsonify({"error": "brain not found"}), 404
-
-    nodes = Node.query.filter_by(brain_id=brain_id).all()
-    node_ids = {n.id for n in nodes}
-    edges = NodeRelationship.query.filter(
-        NodeRelationship.source_node_id.in_(node_ids),
-        NodeRelationship.target_node_id.in_(node_ids),
-    ).all()
-
-    node_list = [_node_to_json(n) for n in nodes]
-    edge_list = [
-        {
-            "source": e.source_node_id,
-            "target": e.target_node_id,
-            "type": e.edge_type or "related",
-            "weight": e.weight if e.weight is not None else e.similarity_score,
-        }
-        for e in edges
-    ]
-    for n in nodes:
-        for target_id in (n.related_node_ids or []):
-            if not any(ed["source"] == n.id and ed["target"] == target_id for ed in edge_list):
-                edge_list.append({"source": n.id, "target": target_id, "type": "related", "weight": None})
-
-    return jsonify({"nodes": node_list, "edges": edge_list}), 200
-
-
-# Merged graph across every owned brain, with hub nodes per workspace.
-@bp.route("/graph/global", methods=["GET"])
-@jwt_required()
-def get_global_graph():
-    user = _get_user_or_404()
-    if not user:
-        return jsonify({"error": "user not found"}), 404
-
-    brains = Brain.query.filter_by(user_id=user.id).order_by(Brain.created_at.desc()).all()
-    brain_ids = [b.id for b in brains]
-    if not brain_ids:
-        return jsonify({"nodes": [], "edges": []}), 200
-
-    brain_by_id = {b.id: b for b in brains}
-    brain_names = {b.id: b.name for b in brains}
-
-    nodes = Node.query.filter(Node.brain_id.in_(brain_ids)).all()
-    node_list = []
-    for n in nodes:
-        j = _node_to_json(n)
-        j["brain_name"] = brain_names.get(n.brain_id)
-        node_list.append(j)
-
-    edge_list = []
-    if nodes:
-        node_ids = {n.id for n in nodes}
-        edges = NodeRelationship.query.filter(
-            NodeRelationship.source_node_id.in_(node_ids),
-            NodeRelationship.target_node_id.in_(node_ids),
-        ).all()
-        edge_list = [
-            {
-                "source": e.source_node_id,
-                "target": e.target_node_id,
-                "type": e.edge_type or "related",
-                "weight": e.weight if e.weight is not None else e.similarity_score,
-            }
-            for e in edges
-        ]
-        for n in nodes:
-            for target_id in (n.related_node_ids or []):
-                if target_id in node_ids and not any(
-                    ed["source"] == n.id and ed["target"] == target_id for ed in edge_list
-                ):
-                    edge_list.append({"source": n.id, "target": target_id, "type": "related", "weight": None})
-
-    # Synthetic hub per brain + weak edges when tags overlap
-    tag_sets = defaultdict(set)
-    for n in nodes:
-        tags = n.tags if n.tags is not None else (n.concepts or [])
-        for t in tags or []:
-            if t:
-                tag_sets[n.brain_id].add(str(t).strip().lower())
-
-    for bid in brain_ids:
-        b = brain_by_id[bid]
-        node_list.append(
-            {
-                "id": f"__brain_{bid}",
-                "brain_id": bid,
-                "source_file_id": None,
-                "title": b.name,
-                "markdown_content": "",
-                "tags": ["__brain_hub__"],
-                "node_type": "brain_hub",
-                "summary": f"Workspace · {b.badge}",
-                "created_at": b.created_at.isoformat() if b.created_at else None,
-                "updated_at": None,
-                "related_node_ids": [],
-                "brain_name": b.name,
-            }
-        )
-
-    for i, bid_a in enumerate(brain_ids):
-        for bid_b in brain_ids[i + 1 :]:
-            shared = tag_sets[bid_a] & tag_sets[bid_b]
-            if not shared:
-                continue
-            w = min(len(shared) / 5.0, 1.0) or 0.2
-            edge_list.append(
-                {
-                    "source": f"__brain_{bid_a}",
-                    "target": f"__brain_{bid_b}",
-                    "type": "brain_link",
-                    "weight": w,
-                }
-            )
-
-    # Tie notes to their hub so the layout clusters per workspace
-    if nodes and len(nodes) <= 400:
-        for n in nodes:
-            edge_list.append(
-                {
-                    "source": n.id,
-                    "target": f"__brain_{n.brain_id}",
-                    "type": "in_brain",
-                    "weight": 0.25,
-                }
-            )
-
-    return jsonify({"nodes": node_list, "edges": edge_list}), 200

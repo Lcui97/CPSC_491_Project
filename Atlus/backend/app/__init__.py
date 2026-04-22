@@ -24,10 +24,6 @@ def _apply_sqlite_compat_migrations(app):
             "node_type": "VARCHAR(32)",
             "updated_at": "DATETIME",
         },
-        "node_relationships": {
-            "edge_type": "VARCHAR(64)",
-            "weight": "FLOAT",
-        },
         "calendar_events": {
             "course_label": "VARCHAR(128)",
             "confidence": "FLOAT",
@@ -87,9 +83,13 @@ def create_app(config_class=Config):
     def missing_callback(error_string):
         return _jwt_error_response("Please log in to continue.")
 
+    _dev_origins = []
+    for host in ("localhost", "127.0.0.1"):
+        for port in (5173, 5174, 5175, 4173):
+            _dev_origins.append(f"http://{host}:{port}")
     cors.init_app(
         app,
-        origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+        origins=_dev_origins,
         allow_headers=["Content-Type", "Authorization"],
         supports_credentials=True,
     )

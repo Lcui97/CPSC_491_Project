@@ -6,7 +6,7 @@ import { useBrains, useBrainSources, useDeleteSource } from '../api/brainQueries
 
 const API_URL = import.meta.env.VITE_API_URL ?? '';
 
-function useAuthFileUrl(brainId, sourceId, enabled) {
+function useAuthFileUrl(brainId, sourceId, enabled, sourceFileType) {
   const [url, setUrl] = useState(null);
   const [err, setErr] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -28,8 +28,13 @@ function useAuthFileUrl(brainId, sourceId, enabled) {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         });
         if (!res.ok) throw new Error('Could not load file');
-        const blob = await res.blob();
+        const buf = await res.arrayBuffer();
         if (revoked) return;
+        const ct = (res.headers.get('content-type') || '').toLowerCase();
+        const blob =
+          ct.includes('pdf') || sourceFileType === 'pdf'
+            ? new Blob([buf], { type: 'application/pdf' })
+            : new Blob([buf], { type: ct && !ct.includes('octet-stream') ? ct : 'application/octet-stream' });
         objectUrl = URL.createObjectURL(blob);
         setUrl(objectUrl);
       } catch (e) {
@@ -42,7 +47,7 @@ function useAuthFileUrl(brainId, sourceId, enabled) {
       revoked = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [brainId, sourceId, enabled]);
+  }, [brainId, sourceId, enabled, sourceFileType]);
 
   return { url, err, loading };
 }
@@ -60,7 +65,12 @@ export default function BrainSourcesView() {
   const open = preview?.id;
   const isImage = preview?.file_type === 'image';
   const isPdf = preview?.file_type === 'pdf';
-  const { url, err, loading } = useAuthFileUrl(brainId, open, !!open && !!preview?.has_file);
+  const { url, err, loading } = useAuthFileUrl(
+    brainId,
+    open,
+    !!open && !!preview?.has_file,
+    preview?.file_type
+  );
 
   const handleView = (s) => {
     if (!s.has_file) {
@@ -76,48 +86,66 @@ export default function BrainSourcesView() {
   };
 
   return (
-    <div className="min-h-screen bg-[rgb(var(--bg))] text-[rgb(var(--text))] flex flex-col">
-      <TopBar compact breadcrumb={`Home › ${brainName} › Sources`} activeBrainName={brainName} />
+    <div className="note-page">
+      <TopBar compact breadcrumb={`Home › ${brainName} › Sources`} />
       <BrainExplorerHeader
         title="Sources"
         right={
-          <button
-            type="button"
-            onClick={() => navigate(`/brain/${brainId}/notes`)}
-            className="text-sm text-[var(--accent)] hover:underline"
-          >
-            Notes workspace
-          </button>
+          <div className="explorer-header-actions">
+            <button
+              type="button"
+              onClick={() => navigate(`/ingest?brain=${encodeURIComponent(brainId)}`)}
+              className="text-link"
+            >
+              Upload
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate(`/brain/${brainId}/notes`)}
+              className="text-link"
+            >
+              Notes workspace
+            </button>
+          </div>
         }
       />
-      <main className="flex-1 overflow-auto p-6 max-w-3xl mx-auto w-full">
-        <p className="text-sm text-[var(--text2)] mb-4">
+      <main style={{ flex: 1, overflow: 'auto', padding: '1.5rem', maxWidth: '48rem', margin: '0 auto', width: '100%' }}>
+        <p style={{ fontSize: '0.875rem', color: 'var(--text2)', marginBottom: '1rem' }}>
           Files and scans attached to this brain. Images open in the preview; PDFs open in a new tab.
         </p>
         <button
           type="button"
           onClick={() => refetch()}
-          className="mb-4 text-xs font-medium text-[var(--accent)] hover:underline"
+          className="text-link"
+          style={{ fontSize: '0.75rem', fontWeight: 500, marginBottom: '1rem', display: 'block' }}
         >
           {isFetching ? 'Refreshing…' : 'Refresh list'}
         </button>
         {sources.length === 0 ? (
-          <p className="text-sm text-[var(--text3)]">No sources yet. Upload from the notes workspace landing page.</p>
+          <p className="text-muted">No sources yet. Upload from the notes workspace landing page.</p>
         ) : (
-          <ul className="space-y-2">
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
             {sources.map((s) => (
               <li
                 key={s.id}
-                className="flex flex-wrap items-center gap-2 rounded-xl border border-[color:var(--hairline)] bg-[var(--bg2)] px-3 py-2.5"
+                className="flex flex-wrap items-center gap-2"
+                style={{
+                  marginBottom: '0.5rem',
+                  borderRadius: '0.75rem',
+                  border: '1px solid var(--hairline)',
+                  background: 'var(--bg2)',
+                  padding: '0.6rem 0.75rem',
+                }}
               >
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-[var(--text1)] truncate">{s.filename}</p>
-                  <p className="text-xs text-[var(--text3)] mono">{s.file_type}</p>
+                  <p style={{ fontSize: '0.875rem', color: 'var(--text1)', margin: 0 }} className="truncate">{s.filename}</p>
+                  <p className="mono" style={{ fontSize: '0.75rem', color: 'var(--text3)', margin: 0 }}>{s.file_type}</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => handleView(s)}
-                  className="h-8 px-3 rounded-lg bg-[var(--accent)]/20 text-[var(--accent)] text-xs font-medium hover:bg-[var(--accent)]/30"
+                  className="btn btn-secondary btn-xs"
+                  style={{ background: 'rgba(19, 181, 234, 0.15)', color: 'rgb(var(--accent))', borderColor: 'transparent' }}
                 >
                   View
                 </button>
@@ -129,7 +157,16 @@ export default function BrainSourcesView() {
                     deleteSource.mutate(s.id);
                     if (preview?.id === s.id) setPreview(null);
                   }}
-                  className="h-8 px-2 text-xs text-red-400/90 hover:text-red-300 disabled:opacity-50"
+                  style={{
+                    height: '2rem',
+                    padding: '0 0.5rem',
+                    fontSize: '0.75rem',
+                    color: '#f87171',
+                    border: 'none',
+                    background: 'none',
+                    cursor: deleteSource.isPending ? 'not-allowed' : 'pointer',
+                    opacity: deleteSource.isPending ? 0.4 : 1,
+                  }}
                 >
                   Delete
                 </button>
@@ -141,44 +178,51 @@ export default function BrainSourcesView() {
 
       {preview ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[color:var(--veil)]"
+          className="modal-backdrop"
+          style={{ background: 'var(--veil)' }}
           onClick={() => setPreview(null)}
           role="presentation"
         >
           <div
-            className="bg-[var(--bg2)] border border-[color:var(--hairline-strong)] rounded-xl max-w-[min(96vw,900px)] max-h-[90vh] w-full flex flex-col shadow-xl"
+            style={{
+              background: 'var(--bg2)',
+              border: '1px solid var(--hairline-strong)',
+              borderRadius: '0.75rem',
+              maxWidth: 'min(96vw, 900px)',
+              maxHeight: '90vh',
+              width: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.15)',
+            }}
             onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-modal="true"
           >
-            <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-[color:var(--hairline)]">
-              <p className="text-sm font-medium text-[var(--text1)] truncate">{preview.filename}</p>
-              <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center justify-between gap-2" style={{ padding: '0.75rem 1rem', borderBottom: '1px solid var(--hairline)' }}>
+              <p style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--text1)', margin: 0 }} className="truncate">{preview.filename}</p>
+              <div className="flex gap-2 shrink-0 items-center">
                 {(isPdf || isImage) && url ? (
-                  <button type="button" onClick={openInNewTab} className="text-xs text-[var(--accent)] hover:underline">
+                  <button type="button" onClick={openInNewTab} className="text-link" style={{ fontSize: '0.75rem' }}>
                     Open in new tab
                   </button>
                 ) : null}
-                <button
-                  type="button"
-                  onClick={() => setPreview(null)}
-                  className="text-sm text-[var(--text3)] hover:text-[var(--text1)] px-2"
-                >
+                <button type="button" onClick={() => setPreview(null)} className="text-link">
                   Close
                 </button>
               </div>
             </div>
-            <div className="flex-1 min-h-[200px] max-h-[calc(90vh-56px)] overflow-auto p-4 flex items-center justify-center bg-[var(--bg3)]">
+            <div className="flex-1 flex items-center justify-center" style={{ minHeight: 200, maxHeight: 'calc(90vh - 56px)', overflow: 'auto', padding: '1rem', background: 'var(--bg3)' }}>
               {loading ? (
-                <p className="text-sm text-[var(--text3)]">Loading…</p>
+                <p className="text-muted">Loading…</p>
               ) : err ? (
-                <p className="text-sm text-amber-800 text-center">{err}</p>
+                <p style={{ fontSize: '0.875rem', color: '#92400e', textAlign: 'center' }}>{err}</p>
               ) : isImage && url ? (
-                <img src={url} alt={preview.filename} className="max-w-full max-h-[min(70vh,720px)] object-contain rounded-lg border border-[color:var(--hairline)]" />
+                <img src={url} alt={preview.filename} style={{ maxWidth: '100%', maxHeight: 'min(70vh, 720px)', objectFit: 'contain', borderRadius: '0.5rem', border: '1px solid var(--hairline)' }} />
               ) : isPdf && url ? (
-                <iframe title={preview.filename} src={url} className="w-full h-[min(70vh,720px)] rounded-lg border border-[color:var(--hairline)] bg-white" />
+                <iframe title={preview.filename} src={url} style={{ width: '100%', height: 'min(70vh, 720px)', borderRadius: '0.5rem', border: '1px solid var(--hairline)', background: '#fff' }} />
               ) : (
-                <p className="text-sm text-[var(--text3)]">Preview not available for this type.</p>
+                <p className="text-muted">Preview not available for this type.</p>
               )}
             </div>
           </div>

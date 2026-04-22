@@ -13,59 +13,41 @@ export default function HandwrittenNotesSplitView({
   const previewUrl = imageUrl || (imageFile ? URL.createObjectURL(imageFile) : null);
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-h-[320px]">
-      <div className="border border-[rgb(var(--border))] rounded-lg overflow-hidden bg-[rgb(var(--bg))] flex items-center justify-center p-2 min-h-[280px]">
+    <div className="handwritten-split-grid">
+      <div className="handwritten-pane">
         {previewUrl ? (
-          <img
-            src={previewUrl}
-            alt="Note"
-            className="max-w-full max-h-[300px] object-contain"
-          />
+          <img src={previewUrl} alt="Note" />
         ) : (
-          <span className="text-[rgb(var(--muted))] text-sm">No image</span>
+          <span style={{ color: 'rgb(var(--muted))', fontSize: '0.875rem' }}>No image</span>
         )}
       </div>
-      <div className="border border-[rgb(var(--border))] rounded-lg overflow-hidden bg-[rgb(var(--bg))] p-3 flex flex-col min-h-[280px]">
+      <div className="handwritten-pane-right">
         {loading ? (
-          <div className="flex-1 flex items-center justify-center text-[rgb(var(--muted))] text-sm">
-            Converting to Markdown…
-          </div>
+          <div className="handwritten-loading">Converting to Markdown…</div>
         ) : !markdown ? (
-          <div className="flex-1 flex flex-col items-center justify-center text-center">
-            <p className="text-[rgb(var(--muted))] text-sm mb-3">
+          <div className="flex flex-col items-center justify-center text-center" style={{ flex: 1 }}>
+            <p style={{ color: 'rgb(var(--muted))', fontSize: '0.875rem', margin: '0 0 0.75rem' }}>
               Generate Markdown from this note
             </p>
             {onConvert && (
-              <button
-                type="button"
-                onClick={onConvert}
-                className="py-2 px-4 rounded-lg bg-[rgb(var(--accent))] hover:bg-[rgb(var(--accentHover))] text-white text-sm font-medium"
-              >
+              <button type="button" onClick={onConvert} className="btn-sm-ocr">
                 Convert to Markdown
               </button>
             )}
           </div>
         ) : (
           <>
-            <pre className="flex-1 overflow-auto text-xs text-[rgb(var(--text))] whitespace-pre-wrap font-sans">
+            <pre className="ocr-md-pre" style={{ flex: 1 }}>
               {markdown}
             </pre>
-            <div className="flex gap-2 mt-2 shrink-0">
+            <div className="handwritten-actions">
               {onSaveAsNode && (
-                <button
-                  type="button"
-                  onClick={onSaveAsNode}
-                  className="py-1.5 px-3 rounded-lg bg-[rgb(var(--accent))] hover:bg-[rgb(var(--accentHover))] text-white text-sm"
-                >
+                <button type="button" onClick={onSaveAsNode} className="btn-sm-ocr">
                   {saveLabel}
                 </button>
               )}
               {onSkip && (
-                <button
-                  type="button"
-                  onClick={onSkip}
-                  className="py-1.5 px-3 rounded-lg border border-[rgb(var(--border))] text-[rgb(var(--muted))] text-sm hover:text-[rgb(var(--text))]"
-                >
+                <button type="button" onClick={onSkip} className="btn-outline-muted">
                   {skipLabel}
                 </button>
               )}

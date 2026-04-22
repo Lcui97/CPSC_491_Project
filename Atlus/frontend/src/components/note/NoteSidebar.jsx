@@ -95,9 +95,9 @@ export default function NoteSidebar({ onSelectNode }) {
   function Section({ label, items }) {
     if (!items.length) return null;
     return (
-      <div className="mb-4">
-        <p className="mono text-[10px] text-[var(--text3)] px-3 mb-1">{label}</p>
-        <ul className="space-y-0.5">
+      <div style={{ marginBottom: '1rem' }}>
+        <p className="ns-section-label">{label}</p>
+        <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
           {items.map((node) => {
             const active = node.id === activeNodeId;
             const iso = node.updated_at || node.created_at;
@@ -106,25 +106,17 @@ export default function NoteSidebar({ onSelectNode }) {
               : '';
             const tag0 = (node.tags && node.tags[0]) || '';
             return (
-              <li key={node.id} className="group flex gap-1 items-stretch">
+              <li key={node.id} className="ns-row">
                 <button
                   type="button"
                   onClick={() => handleSelect(node)}
-                  className={`flex-1 min-w-0 text-left px-3 py-2 rounded-xl border transition-colors ${
-                    active
-                      ? 'border-[color:var(--accent-40)] bg-[var(--accent-glow)]'
-                      : 'border-transparent hover:bg-[var(--bg4)]'
-                  }`}
+                  className={`ns-item ${active ? 'is-active' : ''}`}
                 >
-                  <p className="text-sm text-[var(--text1)] truncate font-medium">{node.title || 'Untitled'}</p>
-                  <p className="text-xs text-[var(--text2)] line-clamp-2 mt-0.5">{snippetFromNode(node) || '—'}</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="mono text-[10px] text-[var(--text3)]">{dateStr}</span>
-                    {tag0 ? (
-                      <span className="mono text-[10px] px-1.5 py-0.5 rounded-[10px] bg-[var(--bg3)] text-[var(--accent)] border border-[color:var(--accent-20)]">
-                        {tag0}
-                      </span>
-                    ) : null}
+                  <p className="ns-item-title">{node.title || 'Untitled'}</p>
+                  <p className="ns-item-snippet">{snippetFromNode(node) || '—'}</p>
+                  <div className="ns-item-meta">
+                    <span className="ns-item-date">{dateStr}</span>
+                    {tag0 ? <span className="ns-tag-pill">{tag0}</span> : null}
                   </div>
                 </button>
                 <button
@@ -146,7 +138,7 @@ export default function NoteSidebar({ onSelectNode }) {
                       }
                     );
                   }}
-                  className="shrink-0 w-8 rounded-xl border border-transparent text-[var(--text3)] hover:text-red-400 hover:border-red-500/30 hover:bg-red-500/5 opacity-70 group-hover:opacity-100 disabled:opacity-40 text-xs"
+                  className="ns-del"
                 >
                   ×
                 </button>
@@ -159,11 +151,8 @@ export default function NoteSidebar({ onSelectNode }) {
   }
 
   return (
-    <aside
-      className="w-[220px] shrink-0 border-r border-[color:var(--hairline)] flex flex-col overflow-hidden"
-      style={{ background: 'var(--bg2)' }}
-    >
-      <div className="p-2 border-b border-[color:var(--hairline)]">
+    <aside className="note-sidebar">
+      <div className="note-sidebar-search">
         <input
           type="text"
           value={q}
@@ -175,39 +164,27 @@ export default function NoteSidebar({ onSelectNode }) {
             }
           }}
           placeholder="Filter notes…"
-          className="w-full h-9 px-3 rounded-lg bg-[var(--bg3)] border text-sm text-[var(--text1)] placeholder:text-[var(--text3)] focus:outline-none focus:border-[color:var(--accent-40)]"
-          style={{ borderColor: 'var(--border2)' }}
         />
       </div>
-      <div className="px-3 py-2 border-b border-[color:var(--hairline)] flex items-center justify-between gap-2">
-        <span className="mono text-[11px] text-[var(--text2)]">{total} notes</span>
+      <div className="note-sidebar-toolbar">
+        <span className="mono" style={{ fontSize: '11px', color: 'var(--text2)' }}>{total} notes</span>
         <button
           type="button"
           onClick={handleNewNote}
           disabled={createNode.isPending || !brainId}
-          className="h-8 px-2 rounded-lg border border-dashed border-[color:var(--hairline-dash)] text-[var(--accent)] text-lg leading-none hover:bg-[var(--bg3)] disabled:opacity-50"
+          className="ns-new-btn"
           title="New note"
         >
           +
         </button>
       </div>
-      {createError ? <p className="px-3 py-1 text-xs text-[#ff6b6b]">{createError}</p> : null}
-      <div className="px-2 py-2 flex gap-1 flex-wrap border-b border-[color:var(--hairline)]">
-        <select
-          value={sort}
-          onChange={(e) => setSort(e.target.value)}
-          className="h-8 px-2 rounded-lg border text-xs bg-[var(--bg3)] text-[var(--text1)]"
-          style={{ borderColor: 'var(--border2)' }}
-        >
+      {createError ? <p style={{ padding: '0 0.75rem', fontSize: '0.75rem', color: '#ff6b6b' }}>{createError}</p> : null}
+      <div className="note-sidebar-filters">
+        <select value={sort} onChange={(e) => setSort(e.target.value)}>
           <option value="recent">Recent</option>
           <option value="alpha">A–Z</option>
         </select>
-        <select
-          value={tagFilter}
-          onChange={(e) => setTagFilter(e.target.value)}
-          className="h-8 px-2 rounded-lg border text-xs bg-[var(--bg3)] text-[var(--text1)] min-w-0 flex-1"
-          style={{ borderColor: 'var(--border2)' }}
-        >
+        <select value={tagFilter} onChange={(e) => setTagFilter(e.target.value)} style={{ flex: 1, minWidth: 0 }}>
           <option value="">All tags</option>
           {allTags.map((t) => (
             <option key={t} value={t}>
@@ -216,15 +193,15 @@ export default function NoteSidebar({ onSelectNode }) {
           ))}
         </select>
       </div>
-      <nav className="flex-1 overflow-y-auto py-2 px-1">
-        <p className="px-2 text-xs text-[var(--text2)] truncate mb-2" title={brain?.name}>
+      <nav className="note-sidebar-nav">
+        <p className="note-sidebar-brain-name" title={brain?.name}>
           {brain?.name || '…'}
         </p>
         <Section label="TODAY" items={grouped.today} />
         <Section label="YESTERDAY" items={grouped.yesterday} />
         <Section label="THIS WEEK" items={grouped.week} />
         <Section label="OLDER" items={grouped.older} />
-        {nodes.length === 0 ? <p className="px-3 text-sm text-[var(--text3)]">No notes match.</p> : null}
+        {nodes.length === 0 ? <p style={{ padding: '0 0.75rem', fontSize: '0.875rem', color: 'var(--text3)' }}>No notes match.</p> : null}
       </nav>
     </aside>
   );

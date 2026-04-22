@@ -3,51 +3,48 @@ import TopBar from '../components/home/TopBar';
 
 export default function KnowledgeGapAnalysis() {
   return (
-    <div className="min-h-screen bg-[rgb(var(--bg))] text-[rgb(var(--text))]">
+    <div className="ingest-page">
       <TopBar />
-      <main className="max-w-4xl mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-semibold text-[rgb(var(--text))]">
+      <main style={{ maxWidth: '56rem', margin: '0 auto', padding: '2rem 1rem' }}>
+        <div className="flex items-center justify-between" style={{ marginBottom: '1.5rem' }}>
+          <h1 style={{ fontSize: '1.5rem', fontWeight: 600, margin: 0, color: 'rgb(var(--text))' }}>
             Knowledge Gap Analysis
           </h1>
-          <Link
-            to="/home"
-            className="text-sm text-[rgb(var(--muted))] hover:text-[rgb(var(--text))] transition-colors"
-          >
+          <Link to="/home" className="text-link" style={{ fontSize: '0.875rem', color: 'rgb(var(--muted))' }}>
             ← Back to Home
           </Link>
         </div>
 
-        <p className="text-[rgb(var(--muted))] mb-8">
+        <p style={{ color: 'rgb(var(--muted))', marginBottom: '2rem' }}>
           Compare your notes with textbooks to identify gaps in your understanding. Backend
           integration coming soon.
         </p>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="bg-[rgb(var(--panel))] border border-[rgb(var(--border))] rounded-xl p-6">
-            <h2 className="text-sm font-medium text-[rgb(var(--text))] mb-3">Notes</h2>
-            <p className="text-sm text-[rgb(var(--muted))]">
+        <div className="kg-grid">
+          <div className="panel-rgb">
+            <h2 style={{ fontSize: '0.875rem', fontWeight: 500, margin: '0 0 0.75rem', color: 'rgb(var(--text))' }}>Notes</h2>
+            <p style={{ fontSize: '0.875rem', color: 'rgb(var(--muted))' }}>
               Select a notes brain or upload notes to compare against your textbook.
             </p>
-            <div className="mt-4 py-8 border-2 border-dashed border-[rgb(var(--border))] rounded-lg text-center text-[rgb(var(--muted))] text-sm">
+            <div style={{ marginTop: '1rem', padding: '2rem', border: '2px dashed rgb(var(--border))', borderRadius: '0.5rem', textAlign: 'center', color: 'rgb(var(--muted))', fontSize: '0.875rem' }}>
               Notes selector — coming soon
             </div>
           </div>
 
-          <div className="bg-[rgb(var(--panel))] border border-[rgb(var(--border))] rounded-xl p-6">
-            <h2 className="text-sm font-medium text-[rgb(var(--text))] mb-3">Textbook</h2>
-            <p className="text-sm text-[rgb(var(--muted))]">
+          <div className="panel-rgb">
+            <h2 style={{ fontSize: '0.875rem', fontWeight: 500, margin: '0 0 0.75rem', color: 'rgb(var(--text))' }}>Textbook</h2>
+            <p style={{ fontSize: '0.875rem', color: 'rgb(var(--muted))' }}>
               Select a textbook brain to compare with your notes.
             </p>
-            <div className="mt-4 py-8 border-2 border-dashed border-[rgb(var(--border))] rounded-lg text-center text-[rgb(var(--muted))] text-sm">
+            <div style={{ marginTop: '1rem', padding: '2rem', border: '2px dashed rgb(var(--border))', borderRadius: '0.5rem', textAlign: 'center', color: 'rgb(var(--muted))', fontSize: '0.875rem' }}>
               Textbook selector — coming soon
             </div>
           </div>
         </div>
 
-        <div className="mt-8 bg-[rgb(var(--panel))] border border-[rgb(var(--border))] rounded-xl p-6">
-          <h2 className="text-sm font-medium text-[rgb(var(--text))] mb-3">Gap Analysis Results</h2>
-          <div className="py-12 border-2 border-dashed border-[rgb(var(--border))] rounded-lg text-center text-[rgb(var(--muted))] text-sm">
+        <div className="panel-rgb" style={{ marginTop: '2rem' }}>
+          <h2 style={{ fontSize: '0.875rem', fontWeight: 500, margin: '0 0 0.75rem', color: 'rgb(var(--text))' }}>Gap Analysis Results</h2>
+          <div style={{ padding: '3rem', border: '2px dashed rgb(var(--border))', borderRadius: '0.5rem', textAlign: 'center', color: 'rgb(var(--muted))', fontSize: '0.875rem' }}>
             Run analysis to see gaps between notes and textbook coverage.
           </div>
         </div>

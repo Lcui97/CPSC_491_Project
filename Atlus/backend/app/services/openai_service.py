@@ -1,10 +1,10 @@
-"""Embeddings + LLM helpers for nodes and chat. Without an API key we fake vectors and keep things runnable."""
+"""LLM helpers for node metadata extraction, OCR cleanup, and chat."""
 import base64
 import io
 import os
 import json
 import re
-from typing import List, Dict, Any, Tuple
+from typing import Dict, Any, Tuple
 
 try:
     from openai import OpenAI
@@ -12,8 +12,6 @@ except ImportError:
     OpenAI = None
 
 _client = None
-# Matches text-embedding-3-small — zero vector when we're stubbing
-EMBEDDING_DIM = 1536
 
 
 def _has_openai() -> bool:
@@ -33,32 +31,10 @@ def _get_client():
     return _client
 
 
-def get_embedding(text: str, model: str = "text-embedding-3-small") -> List[float]:
-    """One embedding; all zeros if we're not calling the API."""
-    if not _has_openai():
-        return [0.0] * EMBEDDING_DIM
-    client = _get_client()
-    r = client.embeddings.create(input=[text], model=model)
-    return r.data[0].embedding
-
-
-def get_embeddings_batch(texts: List[str], model: str = "text-embedding-3-small") -> List[List[float]]:
-    """Batch version of get_embedding; stubbed zeros if no key."""
-    if not texts:
-        return []
-    if not _has_openai():
-        return [[0.0] * EMBEDDING_DIM for _ in texts]
-    client = _get_client()
-    r = client.embeddings.create(input=texts, model=model)
-    by_idx = {item.index: item.embedding for item in r.data}
-    return [by_idx[i] for i in range(len(texts))]
-
-
-NODE_GEN_SYSTEM = """You are a knowledge graph assistant. Given a chunk of textbook or note content, output a JSON object with:
+NODE_GEN_SYSTEM = """You extract structure from a chunk of textbook or note content. Output a JSON object with:
 - "title": short descriptive title (string)
 - "summary": 2-4 sentence summary (string)
-- "concepts": list of key concepts/terms (list of strings)
-- "related_topics": list of topic phrases that might link to other nodes (list of strings, for linking)
+- "concepts": list of key concepts or tags (list of strings)
 
 Output only valid JSON, no markdown code fence."""
 
@@ -73,7 +49,6 @@ def _local_node_from_chunk(chunk_text: str, section_title: str | None = None) ->
         "title": title,
         "summary": summary,
         "concepts": [],
-        "related_topics": [],
     }
 
 
@@ -204,6 +179,46 @@ Output only the Markdown, no explanation."""
     return response.choices[0].message.content.strip()
 
 
+def format_syllabus_markdown(syllabus_text: str) -> str:
+    """Rewrite extracted syllabus text into organized markdown."""
+    source = (syllabus_text or "").strip()
+    if not source:
+        return ""
+    if not _has_openai():
+        return source
+
+    client = _get_client()
+    system = """You are an assistant that organizes raw syllabus text into clean, structured Markdown.
+Rules:
+- Preserve facts exactly; do not invent or alter details.
+- Use concise headings and sections.
+- Prefer this order when available:
+  1) Course Overview
+  2) Instructor and Contact
+  3) Meeting Information
+  4) Materials
+  5) Grading Breakdown
+  6) Policies
+  7) Important Dates and Deadlines
+  8) Weekly Schedule / Topics
+- Use bullet lists and tables when helpful.
+- If information is missing, omit the section (do not write placeholders).
+- Output ONLY markdown, no explanations or code fences."""
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": source[:120000]},
+        ],
+        temperature=0.1,
+    )
+    out = (response.choices[0].message.content or "").strip()
+    if out.startswith("```"):
+        out = re.sub(r"^```(?:markdown|md)?\s*\n?", "", out, flags=re.IGNORECASE)
+        out = re.sub(r"\n?```\s*$", "", out).strip()
+    return out or source
+
+
 # System prompts for the /ask modes
 SUMMARY_SYSTEM = """You are a study assistant. Given notes and documents from the user's knowledge base, produce a clear, concise summary. Use bullet points or short paragraphs. Focus on main ideas and key facts. Output only the summary, no preamble."""
 
@@ -240,3 +255,59 @@ def ask_brain(context_text: str, user_prompt: str, mode: str = "custom") -> str:
         temperature=0.3,
     )
     return response.choices[0].message.content.strip()
+
+
+TTS_VOICES = frozenset({"alloy", "echo", "fable", "onyx", "nova", "shimmer"})
+
+
+def synthesize_speech_mp3(text: str, voice: str = "alloy") -> bytes:
+    """OpenAI Text-to-Speech (audio API) — returns MP3 bytes."""
+    if not _has_openai():
+        raise RuntimeError("OPENAI_API_KEY not set; text-to-speech is unavailable.")
+    voice = (voice or "alloy").lower().strip()
+    if voice not in TTS_VOICES:
+        voice = "alloy"
+    text = (text or "").strip()
+    if not text:
+        raise ValueError("text is required")
+    if len(text) > 4096:
+        text = text[:4096]
+
+    client = _get_client()
+    response = client.audio.speech.create(
+        model="tts-1",
+        voice=voice,
+        input=text,
+    )
+    if hasattr(response, "content") and response.content is not None:
+        return bytes(response.content)
+    if hasattr(response, "read"):
+        return response.read()
+    buf = io.BytesIO()
+    if hasattr(response, "iter_bytes"):
+        for chunk in response.iter_bytes():
+            buf.write(chunk)
+        return buf.getvalue()
+    raise RuntimeError("Unexpected speech API response shape; upgrade openai package.")
+
+
+_MAX_WHISPER_BYTES = 15 * 1024 * 1024  # OpenAI allows up to 25MB; keep a sane cap
+
+
+def transcribe_audio_bytes(data: bytes, filename: str = "recording.webm") -> str:
+    """Speech-to-text via OpenAI Whisper (whisper-1)."""
+    if not _has_openai():
+        raise RuntimeError("OPENAI_API_KEY not set; speech-to-text is unavailable.")
+    if not data or len(data) < 80:
+        raise ValueError("Audio clip is too short or empty.")
+    if len(data) > _MAX_WHISPER_BYTES:
+        raise ValueError("Audio file too large (max 15 MB).")
+
+    client = _get_client()
+    bio = io.BytesIO(data)
+    bio.name = filename or "recording.webm"
+    transcript = client.audio.transcriptions.create(
+        model="whisper-1",
+        file=bio,
+    )
+    return (getattr(transcript, "text", None) or "").strip()

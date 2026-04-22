@@ -1,137 +1,135 @@
-import { useMemo, useState, useEffect, useRef } from 'react';
+import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useBrains, useMeSummary } from '../../api/brainQueries';
+import { useQueryClient } from '@tanstack/react-query';
+import { useMeSummary } from '../../api/brainQueries';
 import AtlusLogo from '../AtlusLogo';
+import { useAssistantPanel } from '../../context/AssistantPanelContext';
+import { IconAssistantPerson } from '../assistant/ClassAssistantChat';
 
-export default function TopBar({ compact = false, breadcrumb = null, activeBrainName = null }) {
+function IconSignOut(props) {
+  const { className = '' } = props;
+  return (
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <polyline points="16 17 21 12 16 7" />
+      <line x1="21" y1="12" x2="9" y2="12" />
+    </svg>
+  );
+}
+
+export default function TopBar({ compact = false, breadcrumb = null }) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [accountOpen, setAccountOpen] = useState(false);
-  const [brainOpen, setBrainOpen] = useState(false);
   const accountRef = useRef(null);
-  const brainRef = useRef(null);
 
   const { data: summary, isLoading: summaryLoading } = useMeSummary();
-  const { data: brains = [] } = useBrains();
+  const { togglePanel, isOpen } = useAssistantPanel();
   const initials = useMemo(() => {
-    const email = summary?.email || 'A';
-    return email[0]?.toUpperCase() || 'A';
-  }, [summary?.email]);
-  const currentBrainName = activeBrainName || brains?.[0]?.name || 'Select brain';
+    const fromName = (summary?.display_name || '').trim().charAt(0);
+    if (fromName) return fromName.toUpperCase();
+    const email = summary?.email || '';
+    return (email[0]?.toUpperCase() || '?');
+  }, [summary?.display_name, summary?.email]);
+
+  const displayLabel = (summary?.display_name || '').trim() || summary?.email?.split('@')[0] || 'Account';
 
   useEffect(() => {
     function handleClickOutside(e) {
-      if (
-        accountRef.current && !accountRef.current.contains(e.target) &&
-        brainRef.current && !brainRef.current.contains(e.target)
-      ) {
+      if (accountRef.current && !accountRef.current.contains(e.target)) {
         setAccountOpen(false);
-        setBrainOpen(false);
       }
     }
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
   }, []);
 
-  function logout() {
+  useEffect(() => {
+    if (!accountOpen) return;
+    function onKeyDown(e) {
+      if (e.key === 'Escape') setAccountOpen(false);
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [accountOpen]);
+
+  const signOut = useCallback(() => {
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
+    queryClient.clear();
+    setAccountOpen(false);
     navigate('/login', { replace: true });
-  }
-
-  function handleBrainSwitch(path) {
-    navigate(path);
-    setBrainOpen(false);
-  }
+  }, [navigate, queryClient]);
 
   return (
     <header className={`atlus-topbar ${compact ? 'compact' : ''}`}>
-      <div className="h-full px-4 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <button type="button" onClick={() => navigate('/home')} className="flex items-center gap-2 min-w-0">
-            <AtlusLogo size={28} className="rounded-[10px] border border-[color:var(--hairline)] bg-black" />
-            <span className="font-semibold text-[var(--text1)]">Atlus</span>
+      <div className="topbar-inner">
+        <div className="topbar-left">
+          <button type="button" onClick={() => navigate('/home')} className="topbar-brand-btn">
+            <AtlusLogo size={28} className="atlus-logo-img logo-frame" />
+            <span className="topbar-brand-text">Atlus</span>
           </button>
-          <span className="h-6 w-px bg-[color:var(--hairline)] shrink-0" />
-          <div className="relative" ref={brainRef}>
-            <button
-              type="button"
-              onClick={() => {
-                setBrainOpen((v) => !v);
-                setAccountOpen(false);
-              }}
-              className="h-8 px-3 rounded-lg border bg-[var(--bg3)] flex items-center gap-2 max-w-[240px]"
-              style={{ borderColor: 'var(--border2)' }}
-            >
-              <span className="w-2 h-2 rounded-full shrink-0" style={{ background: 'var(--teal)' }} />
-              <span className="text-sm text-[var(--text1)] truncate">{currentBrainName}</span>
-            </button>
-            {brainOpen && (
-              <div className="absolute left-0 top-full mt-1 py-1 min-w-[220px] rounded-xl border bg-[var(--bg2)] z-50" style={{ borderColor: 'var(--border2)' }}>
-                {brains.map((brain) => (
-                  <button
-                    key={brain.id}
-                    type="button"
-                    onClick={() => handleBrainSwitch(`/brain/${brain.id}/notes`)}
-                    className="w-full text-left px-3 py-2 text-sm text-[var(--text1)] hover:bg-[var(--bg4)]"
-                  >
-                    {brain.name}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
           {breadcrumb ? (
-            <p className="text-xs text-[var(--text2)] truncate hidden md:block">
+            <p className="topbar-breadcrumb">
               {breadcrumb}
             </p>
           ) : null}
         </div>
 
-        <div className="flex-1 flex items-center justify-center px-2">
+        <div className="topbar-actions">
           <button
             type="button"
-            onClick={() => window.dispatchEvent(new Event('atlus-open-quick-switcher'))}
-            className="w-full max-w-[380px] h-9 rounded-lg border flex items-center gap-2 px-3 bg-[var(--bg3)] text-left"
-            style={{ borderColor: 'var(--border2)' }}
+            className="topbar-icon-btn topbar-assistant-btn"
+            onClick={togglePanel}
+            title={isOpen ? 'Hide assistant panel' : 'Open assistant'}
+            aria-pressed={isOpen}
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[var(--text3)] shrink-0">
-              <circle cx="11" cy="11" r="8" />
-              <line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
-            <span className="flex-1 text-sm text-[var(--text3)]">Search notes, sources, concepts…</span>
-            <span className="mono text-[10px] px-1.5 py-0.5 rounded border text-[var(--text2)] border-[color:var(--hairline)] shrink-0">⌘K</span>
+            <IconAssistantPerson />
           </button>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button type="button" className="w-9 h-9 rounded-[10px] border border-[color:var(--hairline)] bg-[var(--bg3)] text-[var(--text2)]">🔔</button>
-          <button type="button" className="w-9 h-9 rounded-[10px] border border-[color:var(--hairline)] bg-[var(--bg3)] text-[var(--text2)]">⚙</button>
-          <div className="relative" ref={accountRef}>
+          <div className="rel" ref={accountRef}>
             <button
               type="button"
               onClick={() => {
                 setAccountOpen((v) => !v);
-                setBrainOpen(false);
               }}
-              className="w-9 h-9 flex items-center justify-center rounded-[10px] text-white font-medium"
-              style={{ background: 'linear-gradient(135deg, var(--accent), var(--teal))' }}
+              className="topbar-avatar"
+              aria-haspopup="menu"
+              aria-expanded={accountOpen}
+              aria-label="Account menu"
+              title="Account"
             >
               {initials}
             </button>
             {accountOpen && (
-              <div className="absolute right-0 top-full mt-1 py-3 px-4 min-w-[220px] rounded-xl border bg-[var(--bg2)] z-50" style={{ borderColor: 'var(--border2)' }}>
-                <p className="mono text-[10px] text-[var(--text2)] mb-2">ACCOUNT</p>
-                {summaryLoading ? (
-                  <p className="text-sm text-[var(--text2)]">Loading...</p>
-                ) : (
-                  <>
-                    <p className="text-sm text-[var(--text1)] mb-2 break-all">{summary?.email ?? '--'}</p>
-                    <p className="text-xs text-[var(--text2)] mb-1">Notes: {summary?.total_notes ?? 0}</p>
-                    <p className="text-xs text-[var(--text2)]">Brains: {summary?.brains_count ?? 0}</p>
-                  </>
-                )}
-                <button type="button" onClick={logout} className="mt-3 w-full h-8 rounded-lg border border-[color:var(--hairline)] text-sm text-[var(--text1)] hover:bg-[var(--bg4)]">
-                  Logout
+              <div className="topbar-account-panel" role="menu" aria-label="Account">
+                <div className="topbar-account-head">
+                  <span className="topbar-account-avatar" aria-hidden>{initials}</span>
+                  <div className="topbar-account-id">
+                    {summaryLoading ? (
+                      <span className="topbar-account-loading">Loading…</span>
+                    ) : (
+                      <>
+                        <span className="topbar-account-name">{displayLabel}</span>
+                        <span className="topbar-account-email">{summary?.email ?? '—'}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+                {!summaryLoading && summary ? (
+                  <dl className="topbar-account-stats">
+                    <div>
+                      <dt>Notes</dt>
+                      <dd>{summary.total_notes ?? 0}</dd>
+                    </div>
+                    <div>
+                      <dt>Classes</dt>
+                      <dd>{summary.brains_count ?? 0}</dd>
+                    </div>
+                  </dl>
+                ) : null}
+                <button type="button" role="menuitem" className="topbar-sign-out" onClick={signOut}>
+                  <IconSignOut />
+                  Sign out
                 </button>
               </div>
             )}

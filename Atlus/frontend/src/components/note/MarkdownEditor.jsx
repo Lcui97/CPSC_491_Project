@@ -33,11 +33,7 @@ function Tb({ active, onClick, title, children }) {
       type="button"
       title={title}
       onClick={onClick}
-      className={`h-8 min-w-[2rem] px-2 rounded-lg text-xs font-medium border transition-colors ${
-        active
-          ? 'border-[color:var(--accent-40)] text-[var(--accent)]'
-          : 'border-transparent text-[var(--text2)] hover:bg-[var(--bg4)]'
-      }`}
+      className={`md-tool-btn ${active ? 'is-active' : ''}`}
       style={active ? { background: 'var(--accent-glow)' } : undefined}
     >
       {children}
@@ -152,56 +148,51 @@ export default function MarkdownEditor({
     saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? '✓ Saved' : 'Autosave on';
 
   return (
-    <div className="h-full flex flex-col bg-[rgb(var(--bg))]">
-      <div
-        className="h-[42px] shrink-0 flex items-center gap-1 px-2 border-b border-[color:var(--hairline)] bg-[var(--bg2)] overflow-x-auto"
-        style={{ scrollbarWidth: 'thin' }}
-      >
-        <Tb title="Bold" onClick={() => applyWrap('**', '**')}>
+    <div className="md-editor-root">
+      <div className="md-toolbar">
+        <Tb title="Bold" onClick={() => applyWrap('**', '**')} active={false}>
           <strong>B</strong>
         </Tb>
-        <Tb title="Italic" onClick={() => applyWrap('*', '*')}>
+        <Tb title="Italic" onClick={() => applyWrap('*', '*')} active={false}>
           <em>I</em>
         </Tb>
-        <Tb title="Strikethrough" onClick={() => applyWrap('~~', '~~')}>
+        <Tb title="Strikethrough" onClick={() => applyWrap('~~', '~~')} active={false}>
           <span className="line-through">S</span>
         </Tb>
-        <span className="w-px h-5 bg-[color:var(--hairline)] mx-1" />
-        <Tb title="Heading 1" onClick={() => applyLinePrefix('# ')}>
+        <span className="md-toolbar-sep" />
+        <Tb title="Heading 1" onClick={() => applyLinePrefix('# ')} active={false}>
           H1
         </Tb>
-        <Tb title="Heading 2" onClick={() => applyLinePrefix('## ')}>
+        <Tb title="Heading 2" onClick={() => applyLinePrefix('## ')} active={false}>
           H2
         </Tb>
-        <span className="w-px h-5 bg-[color:var(--hairline)] mx-1" />
-        <Tb title="Bullet list" onClick={() => applyLinePrefix('- ')}>
+        <span className="md-toolbar-sep" />
+        <Tb title="Bullet list" onClick={() => applyLinePrefix('- ')} active={false}>
           •
         </Tb>
-        <Tb title="Numbered list" onClick={() => applyLinePrefix('1. ')}>
+        <Tb title="Numbered list" onClick={() => applyLinePrefix('1. ')} active={false}>
           1.
         </Tb>
-        <Tb title="Quote" onClick={() => applyLinePrefix('> ')}>
+        <Tb title="Quote" onClick={() => applyLinePrefix('> ')} active={false}>
           “
         </Tb>
-        <Tb title="Inline code" onClick={() => applyWrap('`', '`')}>
+        <Tb title="Inline code" onClick={() => applyWrap('`', '`')} active={false}>
           &lt;/&gt;
         </Tb>
-        <span className="w-px h-5 bg-[color:var(--hairline)] mx-1" />
-        <Tb title="Link" onClick={promptLink}>
+        <span className="md-toolbar-sep" />
+        <Tb title="Link" onClick={promptLink} active={false}>
           Link
         </Tb>
-        <Tb title="Image" onClick={promptImage}>
+        <Tb title="Image" onClick={promptImage} active={false}>
           Img
         </Tb>
-        <div className="flex-1" />
+        <div className="md-toolbar-spacer" />
         {MODES.map((m) => (
           <button
             key={m}
             type="button"
             onClick={() => setMode(m)}
-            className={`h-8 px-2 rounded-lg text-xs capitalize border ${
-              mode === m ? 'text-[var(--accent)] border-[color:var(--accent-40)]' : 'text-[var(--text2)] border-transparent hover:bg-[var(--bg4)]'
-            }`}
+            className={`md-mode-btn ${mode === m ? 'is-active' : ''}`}
             style={mode === m ? { background: 'var(--accent-glow)' } : undefined}
           >
             {m}
@@ -210,7 +201,7 @@ export default function MarkdownEditor({
       </div>
 
       {onTitleChange ? (
-        <div className="shrink-0 px-6 pt-4 border-b border-[color:var(--hairline-faint)]">
+        <div className="md-title-block">
           <input
             ref={titleInputRef}
             type="text"
@@ -218,38 +209,33 @@ export default function MarkdownEditor({
             onChange={(e) => onTitleChange(e.target.value)}
             onBlur={onTitleBlur}
             placeholder="Note title"
-            className="w-full bg-transparent text-[28px] font-semibold leading-tight text-[var(--text1)] placeholder:text-[var(--text3)] focus:outline-none focus:ring-0"
+            className="md-title-input"
           />
           {metadata ? (
-            <div className="flex flex-wrap gap-2 mt-3 pb-3">
+            <div className="md-meta-row">
               {metadata.dateLabel ? (
-                <button type="button" className="mono text-[11px] px-2 py-1 rounded-lg border border-[color:var(--hairline)] text-[var(--text2)] hover:border-[color:var(--accent-40)]">
+                <button type="button" className="md-meta-chip">
                   {metadata.dateLabel}
                 </button>
               ) : null}
               {metadata.brainName ? (
-                <button type="button" className="mono text-[11px] px-2 py-1 rounded-lg border border-[color:var(--hairline)] text-[var(--text2)] hover:border-[color:var(--accent-40)]">
+                <button type="button" className="md-meta-chip">
                   {metadata.brainName}
                 </button>
               ) : null}
               {(metadata.tags || []).slice(0, 6).map((t) => (
-                <span key={t} className="mono text-[11px] px-2 py-1 rounded-[10px] bg-[var(--bg3)] text-[var(--accent)] border border-[color:var(--accent-20)]">
+                <span key={t} className="md-tag">
                   {t}
                 </span>
               ))}
-              {metadata.linkedCount != null ? (
-                <button type="button" className="mono text-[11px] px-2 py-1 rounded-lg border border-[color:var(--hairline)] text-[var(--text2)] hover:border-[color:var(--accent-40)]">
-                  Linked {metadata.linkedCount}
-                </button>
-              ) : null}
             </div>
           ) : null}
         </div>
       ) : null}
 
-      <div className="flex-1 flex overflow-hidden min-h-0">
+      <div className="md-split-wrap">
         {(mode === 'edit' || mode === 'split') && (
-          <div className={mode === 'split' ? 'w-1/2 border-r border-[color:var(--hairline)]' : 'w-full'}>
+          <div className={mode === 'split' ? 'md-pane md-pane-left' : 'md-pane md-pane-full'}>
             <textarea
               ref={taRef}
               value={local}
@@ -257,38 +243,34 @@ export default function MarkdownEditor({
               onKeyDown={handleKeyDown}
               placeholder={placeholder}
               readOnly={readOnly}
-              className="atlus-editor-textarea w-full h-full resize-none px-6 py-4 bg-transparent text-[15px] leading-[1.85] text-[var(--text2)] placeholder:text-[var(--text3)] focus:outline-none font-sans"
+              className="atlus-editor-textarea"
               spellCheck="false"
             />
           </div>
         )}
         {(mode === 'preview' || mode === 'split') && (
-          <div className={`atlus-editor-preview overflow-y-auto px-6 py-4 ${mode === 'split' ? 'w-1/2' : 'w-full'}`}>
+          <div className={`atlus-editor-preview ${mode === 'split' ? 'md-pane md-pane-right' : 'md-pane md-pane-full'}`}>
             <ReactMarkdown
               components={{
-                h1: ({ node, ...p }) => <h1 className="text-2xl font-semibold text-[var(--text1)] mt-4 mb-2" {...p} />,
-                h2: ({ node, ...p }) => <h2 className="text-xl font-semibold text-[var(--text1)] mt-3 mb-2" {...p} />,
-                h3: ({ node, ...p }) => <h3 className="text-lg font-medium text-[var(--text1)] mt-2 mb-1" {...p} />,
-                p: ({ node, ...p }) => <p className="text-[15px] leading-[1.85] text-[var(--text2)] my-2" {...p} />,
-                ul: ({ node, ...p }) => <ul className="list-disc pl-6 my-2 text-[var(--text2)]" {...p} />,
-                ol: ({ node, ...p }) => <ol className="list-decimal pl-6 my-2 text-[var(--text2)]" {...p} />,
+                h1: ({ node, ...p }) => <h1 className="md-h1" {...p} />,
+                h2: ({ node, ...p }) => <h2 className="md-h2" {...p} />,
+                h3: ({ node, ...p }) => <h3 className="md-h3" {...p} />,
+                p: ({ node, ...p }) => <p className="md-p" {...p} />,
+                ul: ({ node, ...p }) => <ul className="md-ul" {...p} />,
+                ol: ({ node, ...p }) => <ol className="md-ol" {...p} />,
                 blockquote: ({ node, ...p }) => (
-                  <blockquote
-                    className="my-3 pl-4 border-l-2 text-[var(--text2)] italic"
-                    style={{ borderColor: 'var(--accent)', fontFamily: "'Lora', serif" }}
-                    {...p}
-                  />
+                  <blockquote className="md-bq" {...p} />
                 ),
                 code: ({ node, inline, ...p }) =>
                   inline ? (
-                    <code className="px-1 rounded bg-[var(--bg3)] text-sm text-[var(--teal)]" {...p} />
+                    <code className="md-code-inline" {...p} />
                   ) : (
-                    <code className="block p-3 rounded-lg bg-[var(--bg3)] text-sm text-[var(--teal)] overflow-x-auto my-2 mono" {...p} />
+                    <code className="md-code-block" {...p} />
                   ),
-                pre: ({ node, ...p }) => <pre className="p-0 my-0 bg-transparent" {...p} />,
-                table: ({ node, ...p }) => <table className="border-collapse border border-[color:var(--hairline)] my-2 text-sm text-[var(--text2)]" {...p} />,
-                th: ({ node, ...p }) => <th className="border border-[color:var(--hairline)] px-2 py-1 bg-[var(--bg3)]" {...p} />,
-                td: ({ node, ...p }) => <td className="border border-[color:var(--hairline)] px-2 py-1" {...p} />,
+                pre: ({ node, ...p }) => <pre className="md-pre-reset" {...p} />,
+                table: ({ node, ...p }) => <table className="md-table" {...p} />,
+                th: ({ node, ...p }) => <th className="md-th" {...p} />,
+                td: ({ node, ...p }) => <td className="md-td" {...p} />,
               }}
             >
               {local || '_No content_'}
@@ -297,16 +279,14 @@ export default function MarkdownEditor({
         )}
       </div>
 
-      <div className="h-9 shrink-0 flex items-center justify-between px-6 border-t border-[color:var(--hairline)] bg-[var(--bg2)] text-[11px] text-[var(--text3)]">
+      <div className="md-footer-bar">
         <span className="mono">
           {words} words
           {totalNotesInBrain != null ? ` · ${totalNotesInBrain} notes in brain` : ''}
           {sourceLabel ? ` · ${sourceLabel}` : ''}
         </span>
         <span
-          className={`mono ${
-            saveStatus === 'saved' ? 'text-[var(--green)]' : saveStatus === 'saving' ? 'text-[var(--amber)]' : 'text-[var(--text3)]'
-          }`}
+          className={`mono ${saveStatus === 'saved' ? 'save-ok' : saveStatus === 'saving' ? 'save-warn' : ''}`}
         >
           {saveLabel}
         </span>

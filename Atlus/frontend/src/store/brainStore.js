@@ -44,9 +44,6 @@ export const useBrainStore = create((set) => ({
     return node;
   },
 
-  fetchBacklinks: (nodeId) => api(`/api/nodes/${nodeId}/backlinks`),
-  fetchRelated: (nodeId) => api(`/api/nodes/${nodeId}/related`),
-
   invalidateBrain: (brainId) => {
     set((s) => {
       const next = { ...s.nodeListCache };

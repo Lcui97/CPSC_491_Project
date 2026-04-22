@@ -1,10 +1,10 @@
-export default function GeometricBackground({ children, className = '' }) {
+export default function GeometricBackground({ children }) {
   return (
-    <div className={`relative min-h-screen overflow-hidden ${className}`}>
-      <div className="absolute inset-0 bg-[#E7E7E8]" />
+    <div className="geom-wrap">
+      <div className="geom-bg-solid" />
 
       <svg
-        className="absolute top-8 left-8 w-24 h-24 opacity-40"
+        className="geom-grid-svg"
         viewBox="0 0 100 100"
         fill="none"
         stroke="#59524F"
@@ -18,9 +18,8 @@ export default function GeometricBackground({ children, className = '' }) {
         ))}
       </svg>
 
-      {/* Gradient polygon - top-right */}
       <svg
-        className="absolute top-0 right-0 w-[55%] h-[45%] min-w-[320px] min-h-[280px]"
+        className="geom-poly-tr"
         viewBox="0 0 400 300"
         preserveAspectRatio="xMaxYMin slice"
       >
@@ -38,7 +37,7 @@ export default function GeometricBackground({ children, className = '' }) {
       </svg>
 
       <svg
-        className="absolute bottom-0 right-0 w-[50%] h-[50%] min-w-[300px] min-h-[300px]"
+        className="geom-poly-br"
         viewBox="0 0 400 400"
         preserveAspectRatio="xMaxYMax slice"
       >
@@ -49,7 +48,7 @@ export default function GeometricBackground({ children, className = '' }) {
       </svg>
 
       <svg
-        className="absolute top-1/2 right-[30%] w-[40%] h-[50%] -translate-y-1/2 opacity-60"
+        className="geom-mid-svg"
         viewBox="0 0 200 200"
         fill="none"
         stroke="#59524F"
@@ -60,7 +59,7 @@ export default function GeometricBackground({ children, className = '' }) {
         <path d="M 20 100 Q 100 40 180 100 T 20 100" strokeDasharray="2 2" />
       </svg>
 
-      <div className="relative z-10">{children}</div>
+      <div className="geom-content">{children}</div>
     </div>
   );
 }

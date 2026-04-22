@@ -11,12 +11,15 @@ import DocumentIngestion from './pages/DocumentIngestion';
 import KnowledgeGapAnalysis from './pages/KnowledgeGapAnalysis';
 import SharedBrain from './pages/SharedBrain';
 import CalendarPage from './pages/Calendar';
+import AssistantPage from './pages/AssistantPage';
 import QuickSwitcher from './components/note/QuickSwitcher';
+import { AssistantPanelProvider } from './context/AssistantPanelContext';
+import AssistantSlidePanel from './components/assistant/AssistantSlidePanel';
 
 function App() {
   const token = localStorage.getItem('access_token');
   return (
-    <>
+    <AssistantPanelProvider>
     <Routes>
       <Route path="/" element={token ? <Navigate to="/home" replace /> : <Landing />} />
       <Route path="/login" element={<Login />} />
@@ -34,6 +37,14 @@ function App() {
         element={
           <ProtectedRoute>
             <NotesGallery />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/assistant"
+        element={
+          <ProtectedRoute>
+            <AssistantPage />
           </ProtectedRoute>
         }
       />
@@ -104,7 +115,8 @@ function App() {
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
     {token ? <QuickSwitcher /> : null}
-  </>
+    {token ? <AssistantSlidePanel /> : null}
+    </AssistantPanelProvider>
   );
 }
 

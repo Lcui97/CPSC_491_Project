@@ -1,11 +1,48 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 const API_URL = import.meta.env.VITE_API_URL ?? '';
+const STORAGE_KEY = 'atlus_hw_scan_width_px';
+const MIN_SCAN = 200;
+const DEFAULT_SCAN = 380;
 
-/** Loads the scan with the user’s token and wraps the markdown editor beside it. */
-export default function HandwrittenSplitEditor({ brainId, sourceFileId, filename, children }) {
+function readStoredScanWidth() {
+  try {
+    const v = Number(localStorage.getItem(STORAGE_KEY));
+    if (Number.isFinite(v) && v >= MIN_SCAN && v <= 1200) return v;
+  } catch {
+    // ignore
+  }
+  return DEFAULT_SCAN;
+}
+
+export default function HandwrittenSplitEditor({ brainId, sourceFileId, filename, fileType = 'image', children }) {
   const [url, setUrl] = useState(null);
   const [err, setErr] = useState(null);
+  const [scanPx, setScanPx] = useState(readStoredScanWidth);
+  const [isWide, setIsWide] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth >= 1024 : false
+  );
+  const [dragging, setDragging] = useState(false);
+  const rowRef = useRef(null);
+  const scanPxRef = useRef(scanPx);
+  scanPxRef.current = scanPx;
+
+  useEffect(() => {
+    function onResize() {
+      setIsWide(window.innerWidth >= 1024);
+    }
+    onResize();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  useEffect(() => {
+    if (!isWide) return;
+    const el = rowRef.current;
+    if (!el) return;
+    const max = Math.max(MIN_SCAN + 120, Math.floor(el.getBoundingClientRect().width * 0.78));
+    setScanPx((w) => Math.min(Math.max(w, MIN_SCAN), max));
+  }, [isWide]);
 
   useEffect(() => {
     if (!brainId || !sourceFileId) {
@@ -24,41 +61,141 @@ export default function HandwrittenSplitEditor({ brainId, sourceFileId, filename
         if (!res.ok) {
           throw new Error('Could not load scan');
         }
-        const blob = await res.blob();
+        const buf = await res.arrayBuffer();
         if (revoked) return;
+        const ct = (res.headers.get('content-type') || '').toLowerCase();
+        let blob;
+        if (fileType === 'pdf' || ct.includes('pdf')) {
+          blob = new Blob([buf], { type: 'application/pdf' });
+        } else {
+          blob = new Blob([buf], { type: ct && !ct.includes('octet-stream') ? ct : 'image/jpeg' });
+        }
         objectUrl = URL.createObjectURL(blob);
         setUrl(objectUrl);
       } catch (e) {
-        if (!revoked) setErr(e.message || 'Failed to load image');
+        if (!revoked) setErr(e.message || 'Failed to load file');
       }
     })();
     return () => {
       revoked = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [brainId, sourceFileId]);
+  }, [brainId, sourceFileId, fileType]);
+
+  const onResizeMouseDown = useCallback(
+    (e) => {
+      if (!isWide) return;
+      e.preventDefault();
+      const row = rowRef.current;
+      if (!row) return;
+      const startX = e.clientX;
+      const startW = scanPxRef.current;
+      const maxW = Math.max(MIN_SCAN + 120, Math.floor(row.getBoundingClientRect().width * 0.78));
+      setDragging(true);
+      function move(ev) {
+        const dx = ev.clientX - startX;
+        const nw = Math.max(MIN_SCAN, Math.min(startW + dx, maxW));
+        scanPxRef.current = nw;
+        setScanPx(nw);
+      }
+      function up() {
+        window.removeEventListener('mousemove', move);
+        window.removeEventListener('mouseup', up);
+        setDragging(false);
+        try {
+          localStorage.setItem(STORAGE_KEY, String(scanPxRef.current));
+        } catch {
+          // ignore
+        }
+      }
+      window.addEventListener('mousemove', move);
+      window.addEventListener('mouseup', up);
+    },
+    [isWide]
+  );
+
+  const scanStyle =
+    isWide ? { width: scanPx, flexShrink: 0, flexGrow: 0, maxHeight: 'none' } : undefined;
 
   return (
-    <div className="flex-1 flex flex-col lg:flex-row min-h-0 min-w-0 gap-0 border-t border-[color:var(--hairline)]">
-      <aside className="lg:w-[min(44%,420px)] shrink-0 border-b lg:border-b-0 lg:border-r border-[color:var(--hairline)] bg-[var(--bg2)] flex flex-col min-h-[200px] lg:min-h-0 max-h-[40vh] lg:max-h-none">
-        <p className="mono text-[10px] text-[var(--text3)] px-3 py-2 border-b border-[color:var(--hairline)] shrink-0">
-          ORIGINAL SCAN
-        </p>
-        <div className="flex-1 min-h-0 flex items-center justify-center p-3 overflow-auto bg-[var(--fill-well)]">
-          {err ? (
-            <p className="text-sm text-amber-800 text-center px-2">{err}</p>
-          ) : url ? (
-            <img
-              src={url}
-              alt={filename || 'Handwritten note'}
-              className="max-w-full max-h-full object-contain rounded-lg border border-[color:var(--hairline)] shadow-lg"
-            />
-          ) : (
-            <p className="text-sm text-[var(--text3)]">Loading scan…</p>
-          )}
-        </div>
-      </aside>
-      <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">{children}</div>
+    <div
+      className="flex-1 flex flex-col min-h-0 min-w-0"
+      style={{ borderTop: '1px solid var(--hairline)' }}
+    >
+      <div ref={rowRef} className="flex-1 flex hw-split-row min-h-0" style={{ minHeight: 0 }}>
+        <aside className="hw-scan-pane" style={scanStyle}>
+          <p
+            className="mono"
+            style={{
+              fontSize: 10,
+              color: 'var(--text3)',
+              padding: '0.5rem 0.75rem',
+              borderBottom: '1px solid var(--hairline)',
+              margin: 0,
+            }}
+          >
+            {fileType === 'pdf' ? 'ORIGINAL PDF' : 'ORIGINAL SCAN'}
+          </p>
+          <div
+            style={{
+              flex: 1,
+              minHeight: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'stretch',
+              justifyContent: 'flex-start',
+              padding: '0.75rem',
+              overflow: 'auto',
+              background: 'var(--fill-well)',
+            }}
+          >
+            {err ? (
+              <p style={{ fontSize: '0.875rem', color: '#92400e', textAlign: 'center', padding: '0 0.5rem' }}>{err}</p>
+            ) : url ? (
+              fileType === 'pdf' ? (
+                <iframe
+                  title={filename || 'PDF'}
+                  src={url}
+                  style={{
+                    width: '100%',
+                    flex: '1 1 auto',
+                    minHeight: 'min(88vh, 1200px)',
+                    alignSelf: 'stretch',
+                    borderRadius: '0.5rem',
+                    border: '1px solid var(--hairline)',
+                    background: '#fff',
+                  }}
+                />
+              ) : (
+                <img
+                  src={url}
+                  alt={filename || 'Handwritten note'}
+                  style={{
+                    alignSelf: 'center',
+                    maxWidth: '100%',
+                    maxHeight: '100%',
+                    objectFit: 'contain',
+                    borderRadius: '0.5rem',
+                    border: '1px solid var(--hairline)',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                  }}
+                />
+              )
+            ) : (
+              <p className="text-muted">Loading…</p>
+            )}
+          </div>
+        </aside>
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize scan and editor"
+          title="Drag to resize"
+          className={`hw-split-resize ${dragging ? 'is-dragging' : ''}`}
+          onMouseDown={onResizeMouseDown}
+        />
+        <div className="hw-editor-pane">{children}</div>
+      </div>
     </div>
   );
 }

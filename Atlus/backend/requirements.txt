@@ -8,6 +8,7 @@ google-auth
 requests
 # Document ingestion & knowledge graph
 PyPDF2
+pymupdf
 openai
 pinecone
 python-docx

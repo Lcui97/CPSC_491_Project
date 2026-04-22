@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, apiUpload } from './client';
+import { api, apiUpload, apiUploadWithProgress } from './client';
 
 export const brainKeys = {
   list: () => ['brains'],
@@ -11,6 +11,8 @@ export const brainKeys = {
   sources: (brainId) => ['brains', brainId, 'sources'],
   calendarByBrain: (brainId, params) => ['brains', brainId, 'calendar-events', params],
   calendarGlobal: (params) => ['calendar-events', params],
+  classes: () => ['classes'],
+  syllabusPreview: (classId) => ['classes', classId, 'syllabus-preview'],
 };
 
 export function useBrains() {
@@ -98,9 +100,11 @@ export function useDeleteBrain() {
     mutationFn: (brainId) => api(`/api/brain/${brainId}`, { method: 'DELETE' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: brainKeys.list() });
+      queryClient.invalidateQueries({ queryKey: brainKeys.classes() });
       queryClient.invalidateQueries({ queryKey: ['me', 'notes'] });
       queryClient.invalidateQueries({ queryKey: ['me', 'activity'] });
       queryClient.invalidateQueries({ queryKey: brainKeys.meSummary() });
+      queryClient.invalidateQueries({ queryKey: ['calendar-events'] });
     },
   });
 }
@@ -252,5 +256,67 @@ export function useUploadSyllabus() {
         queryClient.invalidateQueries({ queryKey: brainKeys.sources(vars.brainId) });
       }
     },
+  });
+}
+
+export function useClasses() {
+  return useQuery({
+    queryKey: brainKeys.classes(),
+    queryFn: () => api('/api/classes').then((r) => r.classes || []),
+  });
+}
+
+export function useCreateClassManual() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body) => api('/api/classes/manual', { method: 'POST', body: JSON.stringify(body) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: brainKeys.classes() });
+      queryClient.invalidateQueries({ queryKey: brainKeys.list() });
+      queryClient.invalidateQueries({ queryKey: ['calendar-events'] });
+    },
+  });
+}
+
+export function useCreateClassFromSyllabus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ file, onProgress }) => apiUploadWithProgress('/api/classes/syllabus', {}, file, onProgress),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: brainKeys.classes() });
+      queryClient.invalidateQueries({ queryKey: brainKeys.list() });
+      queryClient.invalidateQueries({ queryKey: ['calendar-events'] });
+    },
+  });
+}
+
+export function useClassesAssistant() {
+  return useMutation({
+    mutationFn: ({ prompt, signal, ...rest }) =>
+      api('/api/classes/assistant', {
+        method: 'POST',
+        body: JSON.stringify({ prompt, ...rest }),
+        signal,
+      }),
+  });
+}
+
+export function useUpdateClass() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ classId, body }) => api(`/api/classes/${classId}`, { method: 'PUT', body: JSON.stringify(body) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: brainKeys.classes() });
+      queryClient.invalidateQueries({ queryKey: brainKeys.list() });
+      queryClient.invalidateQueries({ queryKey: ['calendar-events'] });
+    },
+  });
+}
+
+export function useClassSyllabusPreview(classId, enabled = true) {
+  return useQuery({
+    queryKey: brainKeys.syllabusPreview(classId),
+    queryFn: () => api(`/api/classes/${classId}/syllabus-preview`),
+    enabled: !!classId && enabled,
   });
 }

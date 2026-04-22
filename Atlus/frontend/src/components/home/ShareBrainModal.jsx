@@ -48,47 +48,33 @@ export default function ShareBrainModal({ brain, onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[color:var(--veil)]" onClick={onClose}>
-      <div
-        className="bg-[rgb(var(--panel))] border border-[rgb(var(--border))] rounded-xl p-6 w-full max-w-md shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-[rgb(var(--text))]">Share brain</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-[rgb(var(--muted))] hover:text-[rgb(var(--text))] text-xl leading-none"
-          >
+    <div className="modal-backdrop" onClick={onClose} role="presentation">
+      <div className="modal-card modal-card-sm" onClick={(e) => e.stopPropagation()} role="dialog">
+        <div className="flex items-center justify-between" style={{ marginBottom: '1rem' }}>
+          <h2 className="modal-card-title" style={{ fontSize: '1.125rem' }}>
+            Share brain
+          </h2>
+          <button type="button" onClick={onClose} className="modal-close-btn" aria-label="Close">
             ×
           </button>
         </div>
-        <p className="text-sm text-[rgb(var(--muted))] mb-2">
-          Anyone with the link can <strong className="text-[rgb(var(--text))]">join</strong> this brain as a collaborator
-          after signing in: <strong className="text-[rgb(var(--text))]">{brain?.name}</strong>
+        <p style={{ fontSize: '0.875rem', color: 'rgb(var(--muted))', margin: '0 0 0.5rem' }}>
+          Anyone with the link can <strong style={{ color: 'rgb(var(--text))' }}>join</strong> this brain as a collaborator
+          after signing in: <strong style={{ color: 'rgb(var(--text))' }}>{brain?.name}</strong>
         </p>
         {loading ? (
-          <p className="text-sm text-[rgb(var(--muted))] py-4">Creating link…</p>
+          <p style={{ fontSize: '0.875rem', color: 'rgb(var(--muted))', padding: '1rem 0' }}>Creating link…</p>
         ) : error ? (
-          <p className="text-sm text-red-400 py-2">{error}</p>
+          <p style={{ fontSize: '0.875rem', color: 'var(--red)', padding: '0.5rem 0' }}>{error}</p>
         ) : (
           <div className="flex gap-2">
-            <input
-              type="text"
-              readOnly
-              value={shareUrl}
-              className="flex-1 px-3 py-2 rounded-lg bg-[rgb(var(--panel2))] border border-[rgb(var(--border))] text-sm text-[rgb(var(--text))]"
-            />
-            <button
-              type="button"
-              onClick={handleCopy}
-              className="py-2 px-4 rounded-lg bg-[rgb(var(--accent))] hover:bg-[rgb(var(--accentHover))] text-white text-sm font-medium transition-colors whitespace-nowrap"
-            >
+            <input type="text" readOnly value={shareUrl} className="field-input flex-1" style={{ fontSize: '0.875rem' }} />
+            <button type="button" onClick={handleCopy} className="btn-sm-ocr" style={{ whiteSpace: 'nowrap' }}>
               {copied ? 'Copied!' : 'Copy'}
             </button>
           </div>
         )}
-        <p className="mt-3 text-xs text-[rgb(var(--muted))]">
+        <p style={{ marginTop: '0.75rem', fontSize: '0.75rem', color: 'rgb(var(--muted))' }}>
           Recipients open the link, sign in, and tap Join brain to add it to their workspace.
         </p>
       </div>

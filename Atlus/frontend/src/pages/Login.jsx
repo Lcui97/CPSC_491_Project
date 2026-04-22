@@ -75,9 +75,9 @@ export default function Login() {
   const showGoogleLogin = clientId && !isLocalhost;
 
   return (
-    <div className="min-h-screen bg-[#E7E7E8] text-[#212529] flex items-center justify-center p-4 relative overflow-hidden">
-      <div className="absolute top-0 right-0 w-64 h-64 opacity-20">
-        <svg viewBox="0 0 100 100" className="w-full h-full">
+    <div className="login-page">
+      <div className="login-deco-tr">
+        <svg viewBox="0 0 100 100" style={{ width: '100%', height: '100%' }}>
           <defs>
             <linearGradient id="login-grad" x1="0%" y1="0%" x2="100%" y2="100%">
               <stop offset="0%" stopColor="#F5D547" />
@@ -87,33 +87,30 @@ export default function Login() {
           <polygon points="100,0 100,100 0,50" fill="url(#login-grad)" />
         </svg>
       </div>
-      <div className="absolute bottom-0 left-0 w-48 h-48 opacity-10">
-        <svg viewBox="0 0 100 100" className="w-full h-full">
+      <div className="login-deco-bl">
+        <svg viewBox="0 0 100 100" style={{ width: '100%', height: '100%' }}>
           <polygon points="0,100 0,0 100,100" fill="#59524F" />
         </svg>
       </div>
-      <div className="w-full max-w-sm bg-white/95 backdrop-blur border border-[#C9CACC] rounded-xl p-6 shadow-lg relative z-10">
-        <div className="text-center mb-6">
-          <div className="flex justify-center mb-3">
-            <AtlusLogo size={56} className="rounded-2xl border border-[#C9CACC] shadow-sm bg-black" />
+      <div className="login-card">
+        <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.75rem' }}>
+            <AtlusLogo size={56} className="atlus-logo-img logo-frame" style={{ borderRadius: '1rem' }} />
           </div>
-          <h1 className="text-xl font-semibold text-[#212529]">Atlus</h1>
-          <p className="text-sm text-[#495057] mt-1">Your knowledge base, connected.</p>
+          <h1>Atlus</h1>
+          <p className="tagline">Your knowledge base, connected.</p>
           {backendOk === false && (
-            <p className="text-xs text-amber-600 mt-2">Backend unreachable. Is the server running on port 5000?</p>
-          )}
-          {backendOk === true && (
-            <p className="text-xs text-green-600 mt-2">Backend connected.</p>
+            <p className="hint-warn">Backend unreachable. Is the server running on port 5000?</p>
           )}
         </div>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="login-form-stack">
           <input
             type="email"
             placeholder="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            className="w-full px-3 py-2 rounded-lg bg-[#EBE6DF]/60 border border-[rgb(var(--border))] text-[rgb(var(--text))] placeholder:text-[rgb(var(--muted))] focus:outline-none focus:ring-2 focus:ring-[rgb(var(--accent))]"
+            className="login-input"
           />
           <input
             type="password"
@@ -121,41 +118,36 @@ export default function Login() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required={!isRegister}
-            className="w-full px-3 py-2 rounded-lg bg-[#EBE6DF]/60 border border-[rgb(var(--border))] text-[rgb(var(--text))] placeholder:text-[rgb(var(--muted))] focus:outline-none focus:ring-2 focus:ring-[rgb(var(--accent))]"
+            className="login-input"
           />
           {error && (
-            <p className="text-sm text-red-500" role="alert">{error}</p>
+            <p className="text-danger" style={{ fontSize: '0.875rem' }} role="alert">{error}</p>
           )}
-          <div className="flex gap-2">
+          <div className="login-actions">
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 py-2 px-4 rounded-lg bg-[rgb(var(--accent))] hover:bg-[rgb(var(--accentHover))] text-white font-medium transition-colors disabled:opacity-50"
+              className="btn btn-primary"
             >
               {loading ? '…' : isRegister ? 'Register' : 'Login'}
             </button>
             <button
               type="button"
               onClick={() => { setIsRegister((v) => !v); setError(''); }}
-              className="py-2 px-4 rounded-lg border border-[#C9CACC] text-[#495057] hover:bg-[#E7E7E8] transition-colors text-sm"
+              className="btn btn-secondary"
             >
               {isRegister ? 'Login' : 'Register'}
             </button>
           </div>
         </form>
         {showGoogleLogin && (
-          <div className="mt-4 pt-4 border-t border-[rgb(var(--border))] flex justify-center">
+          <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid rgb(var(--border))', display: 'flex', justifyContent: 'center' }}>
             <GoogleLogin
               onSuccess={handleGoogleSuccess}
               onError={handleGoogleError}
               useOneTap={false}
             />
           </div>
-        )}
-        {isLocalhost && (
-          <p className="mt-4 text-xs text-[#6c757d] text-center">
-            Use email and password above. Google Sign-In is hidden on localhost to avoid origin/403 errors; it will appear when you deploy.
-          </p>
         )}
       </div>
     </div>

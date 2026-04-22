@@ -1,4 +1,7 @@
-from flask import Blueprint, jsonify, request
+import re
+from typing import Optional
+
+from flask import Blueprint, Response, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from app.models.user import User
@@ -10,6 +13,21 @@ bp = Blueprint("home", __name__)
 
 # Don't count onboarding / system nodes toward “how many notes”
 NOTE_TYPES = ("note", "handwritten", "textbook_section")
+
+
+def _display_name_from_email(email: Optional[str]) -> str:
+    if not email or "@" not in email:
+        return "there"
+    local = email.split("@", 1)[0].strip()
+    local = re.sub(r"[._\-+]+", " ", local)
+    parts = [p for p in local.split() if p]
+    if not parts:
+        return "there"
+
+    def cap(word: str) -> str:
+        return word[0].upper() + word[1:].lower() if len(word) > 1 else word.upper()
+
+    return " ".join(cap(p) for p in parts)
 
 
 @bp.route("/home", methods=["GET"])
@@ -50,9 +68,60 @@ def me_summary():
         total_notes = 0
     return jsonify({
         "email": user.email,
+        "display_name": _display_name_from_email(user.email),
         "total_notes": total_notes,
         "brains_count": brains_count,
     }), 200
+
+
+@bp.route("/audio/tts", methods=["POST"])
+@jwt_required()
+def audio_tts():
+    """Text-to-speech via OpenAI Audio API (same OPENAI_API_KEY as chat). Returns audio/mpeg."""
+    data = request.get_json() or {}
+    text = (data.get("text") or "").strip()
+    voice = (data.get("voice") or "alloy").strip()
+    if not text:
+        return jsonify({"error": "text required"}), 400
+    try:
+        from app.services.openai_service import synthesize_speech_mp3
+
+        mp3 = synthesize_speech_mp3(text, voice=voice)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 503
+    except Exception as e:
+        return jsonify({"error": f"TTS failed: {e!s}"}), 500
+    return Response(mp3, mimetype="audio/mpeg", headers={"Cache-Control": "no-store"})
+
+
+@bp.route("/audio/transcribe", methods=["POST"])
+@jwt_required()
+def audio_transcribe():
+    """Speech-to-text via OpenAI Whisper (multipart file field `file`)."""
+    f = request.files.get("file")
+    if not f or not f.filename:
+        return jsonify({"error": "file required"}), 400
+    raw = f.read()
+    if len(raw) > 15 * 1024 * 1024:
+        return jsonify({"error": "file too large (max 15 MB)"}), 400
+    name = (f.filename or "recording.webm").lower()
+    if not any(name.endswith(ext) for ext in (".webm", ".wav", ".mp3", ".mp4", ".mpeg", ".mpga", ".m4a", ".ogg", ".oga", ".flac")):
+        # Whisper accepts many types; allow unknown extension if non-empty body
+        if not raw:
+            return jsonify({"error": "empty file"}), 400
+    try:
+        from app.services.openai_service import transcribe_audio_bytes
+
+        text = transcribe_audio_bytes(raw, filename=f.filename or "recording.webm")
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 503
+    except Exception as e:
+        return jsonify({"error": f"Transcription failed: {e!s}"}), 500
+    return jsonify({"text": text}), 200
 
 
 @bp.route("/me/activity", methods=["GET"])

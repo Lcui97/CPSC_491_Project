@@ -8,7 +8,8 @@ export default function AtlusLogo({ className = '', size = 28, alt = 'Atlus' }) 
       alt={alt}
       width={size}
       height={size}
-      className={`object-contain shrink-0 ${className}`}
+      className={className}
+      style={{ objectFit: 'contain', flexShrink: 0 }}
       draggable={false}
     />
   );

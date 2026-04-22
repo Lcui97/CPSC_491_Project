@@ -1,67 +1,73 @@
-import { useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { useBrainSources, useBrainAsk, useDeleteSource } from '../../api/brainQueries';
+import { Link, useParams } from 'react-router-dom';
+import { useBrainSources, useDeleteSource, useBrains } from '../../api/brainQueries';
+import BrainHandwrittenUpload from './BrainHandwrittenUpload';
 
-export default function BrainLanding() {
+/** `brainName` from parent keeps the greeting aligned with the rest of NoteView when provided. */
+export default function BrainLanding({ brainName: brainNameProp }) {
   const { brainId } = useParams();
-  const [prompt, setPrompt] = useState('');
-  const [response, setResponse] = useState(null);
+
+  const { data: brains = [] } = useBrains();
+  const resolvedName =
+    brainNameProp?.trim() ||
+    brains.find((b) => String(b.id) === String(brainId))?.name?.trim() ||
+    null;
 
   const { data: sources = [], refetch: refetchSources, isFetching: sourcesFetching } = useBrainSources(brainId);
-  const askMutation = useBrainAsk(brainId);
   const deleteSource = useDeleteSource(brainId);
 
-  async function handleAsk(mode = 'summary') {
-    if (!brainId) return;
-    setResponse(null);
-    const userPrompt = prompt.trim() || (mode === 'summary' ? 'Summarize the above.' : '');
-    try {
-      const data = await askMutation.mutateAsync({ prompt: userPrompt, mode });
-      setResponse(data?.response || '');
-    } catch (err) {
-      setResponse(`Error: ${err.message || 'Request failed'}`);
-    }
-  }
-
-  function handlePromptSubmit(e) {
-    e.preventDefault();
-    if (prompt.trim()) handleAsk('custom');
-    else handleAsk('summary');
-  }
+  const welcomeTitle = resolvedName ? `Welcome to ${resolvedName}` : 'Welcome';
 
   return (
-    <div className="flex-1 overflow-auto min-h-0 flex flex-col">
-      <div className="max-w-2xl mx-auto w-full p-6 space-y-8">
+    <div className="brain-landing-wrap">
+      <div className="brain-landing-inner">
         <section>
-          <h1 className="text-xl font-semibold text-[rgb(var(--text))] mb-2">Welcome to your brain</h1>
-          <p className="text-sm text-[rgb(var(--muted))] mb-2">
+          <h1 style={{ fontSize: '1.25rem', fontWeight: 600, color: 'rgb(var(--text))', margin: '0 0 0.5rem' }}>
+            {welcomeTitle}
+          </h1>
+          <p style={{ fontSize: '0.875rem', color: 'rgb(var(--muted))', margin: '0 0 0.5rem' }}>
             Choose a note in the sidebar to open it. Handwritten scans show the image on the left and Markdown on the right.
           </p>
         </section>
 
-        <section className="bg-[rgb(var(--panel))] border border-[rgb(var(--border))] rounded-xl p-4">
-          <div className="flex items-center justify-between gap-2 mb-2">
-            <h2 className="text-sm font-semibold text-[rgb(var(--text))]">Sources in this brain</h2>
-            <button
-              type="button"
-              onClick={() => refetchSources()}
-              disabled={sourcesFetching}
-              className="text-xs font-medium text-[rgb(var(--accent))] hover:underline disabled:opacity-50"
-            >
-              {sourcesFetching ? 'Refreshing…' : 'Refresh sources'}
-            </button>
+        <BrainHandwrittenUpload brainId={brainId} />
+
+        <section className="panel-rgb" style={{ marginTop: '1.5rem' }}>
+          <div className="flex items-center justify-between gap-2" style={{ marginBottom: '0.5rem' }}>
+            <h2 style={{ margin: 0, fontSize: '0.875rem', fontWeight: 600, color: 'rgb(var(--text))' }}>Sources in this brain</h2>
+            <div className="flex gap-2 items-center">
+              <Link to={`/brain/${brainId}/sources`} className="text-link" style={{ fontSize: '0.75rem' }}>
+                Open files and previews
+              </Link>
+              <button
+                type="button"
+                onClick={() => refetchSources()}
+                disabled={sourcesFetching}
+                className="text-link"
+                style={{ fontSize: '0.75rem', background: 'none', border: 'none', cursor: 'pointer' }}
+              >
+                {sourcesFetching ? 'Refreshing…' : 'Refresh sources'}
+              </button>
+            </div>
           </div>
           {sources.length === 0 ? (
-            <p className="text-sm text-[rgb(var(--muted))]">No sources linked to this brain yet.</p>
+            <p style={{ fontSize: '0.875rem', color: 'rgb(var(--muted))' }}>No sources linked to this brain yet.</p>
           ) : (
-            <ul className="space-y-2">
+            <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
               {sources.map((s) => (
                 <li
                   key={s.id}
-                  className="flex items-center gap-2 py-2 px-3 rounded-lg bg-[rgb(var(--panel2))] border border-[rgb(var(--border))] text-sm text-[rgb(var(--text))]"
+                  className="flex items-center gap-2"
+                  style={{
+                    padding: '0.5rem 0.75rem',
+                    marginBottom: '0.5rem',
+                    borderRadius: '0.5rem',
+                    background: 'rgb(var(--panel2))',
+                    border: '1px solid rgb(var(--border))',
+                    fontSize: '0.875rem',
+                  }}
                 >
-                  <span className="truncate flex-1 min-w-0">{s.filename}</span>
-                  <span className="text-[rgb(var(--muted))] text-xs shrink-0">{s.file_type}</span>
+                  <span className="truncate flex-1 min-w-0" style={{ color: 'rgb(var(--text))' }}>{s.filename}</span>
+                  <span style={{ color: 'rgb(var(--muted))', fontSize: '0.75rem', flexShrink: 0 }}>{s.file_type}</span>
                   <button
                     type="button"
                     disabled={deleteSource.isPending}
@@ -70,82 +76,21 @@ export default function BrainLanding() {
                         return;
                       deleteSource.mutate(s.id);
                     }}
-                    className="shrink-0 text-xs font-medium text-red-400/90 hover:text-red-300 disabled:opacity-50"
+                    style={{
+                      flexShrink: 0,
+                      fontSize: '0.75rem',
+                      fontWeight: 500,
+                      color: '#f87171',
+                      border: 'none',
+                      background: 'none',
+                      cursor: 'pointer',
+                    }}
                   >
                     Delete
                   </button>
                 </li>
               ))}
             </ul>
-          )}
-        </section>
-
-        <section className="bg-[rgb(var(--panel))] border border-[rgb(var(--border))] rounded-xl p-4">
-          <h2 className="text-sm font-semibold text-[rgb(var(--text))] mb-2">Ask your brain</h2>
-          <p className="text-sm text-[rgb(var(--muted))] mb-3">Get summaries, study guides, or key points from your notes.</p>
-          <form
-            onSubmit={handlePromptSubmit}
-            className="flex gap-2 items-center rounded-xl bg-[rgb(var(--panel2))] border border-[rgb(var(--border))] px-3 py-2 focus-within:ring-2 focus-within:ring-[rgb(var(--accent))]"
-          >
-            <input
-              type="text"
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder="Ask anything about your notes..."
-              className="flex-1 min-w-0 bg-transparent text-[rgb(var(--text))] placeholder:text-[rgb(var(--muted))] focus:outline-none text-sm py-1"
-            />
-            <button
-              type="submit"
-              disabled={askMutation.isPending}
-              className="shrink-0 p-2 rounded-lg bg-[rgb(var(--accent))] hover:bg-[rgb(var(--accentHover))] disabled:opacity-50 text-white"
-              title="Send"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <line x1="22" y1="2" x2="11" y2="13" />
-                <polygon points="22 2 15 22 11 13 2 9 22 2" />
-              </svg>
-            </button>
-          </form>
-          <div className="flex flex-wrap gap-2 mt-3">
-            <button
-              type="button"
-              onClick={() => handleAsk('summary')}
-              disabled={askMutation.isPending}
-              className="py-1.5 px-3 rounded-full bg-[rgb(var(--panel2))] border border-[rgb(var(--border))] text-[rgb(var(--text))] hover:bg-[rgb(var(--border))]/50 disabled:opacity-50 text-xs font-medium"
-            >
-              Summarize
-            </button>
-            <button
-              type="button"
-              onClick={() => handleAsk('study_guide')}
-              disabled={askMutation.isPending}
-              className="py-1.5 px-3 rounded-full bg-[rgb(var(--panel2))] border border-[rgb(var(--border))] text-[rgb(var(--text))] hover:bg-[rgb(var(--border))]/50 disabled:opacity-50 text-xs font-medium"
-            >
-              Study guide
-            </button>
-            <button
-              type="button"
-              onClick={() => handleAsk('key_points')}
-              disabled={askMutation.isPending}
-              className="py-1.5 px-3 rounded-full bg-[rgb(var(--panel2))] border border-[rgb(var(--border))] text-[rgb(var(--text))] hover:bg-[rgb(var(--border))]/50 disabled:opacity-50 text-xs font-medium"
-            >
-              Key points
-            </button>
-          </div>
-          {response !== null && (
-            <div className="mt-4 p-4 rounded-lg bg-[rgb(var(--panel2))] border border-[rgb(var(--border))]">
-              <div className="text-sm text-[rgb(var(--text))] whitespace-pre-wrap">{response}</div>
-            </div>
           )}
         </section>
       </div>

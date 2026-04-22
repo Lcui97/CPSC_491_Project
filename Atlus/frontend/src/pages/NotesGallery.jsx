@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import TopBar from '../components/home/TopBar';
 import WorkspaceSidebar from '../components/home/WorkspaceSidebar';
@@ -35,11 +35,9 @@ export default function NotesGallery() {
   const total = data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / perPage));
 
-  const brainName = useMemo(() => activeBrain?.name || null, [activeBrain]);
-
   return (
-    <div className="min-h-screen bg-[rgb(var(--bg))] text-[rgb(var(--text))] flex flex-col">
-      <TopBar compact breadcrumb="Home › All notes" activeBrainName={brainName} />
+    <div className="note-page">
+      <TopBar compact breadcrumb="Home › All notes" />
       <main className="flex-1 flex overflow-hidden min-h-0">
         <WorkspaceSidebar
           sidebarExpanded={sidebarExpanded}
@@ -49,11 +47,11 @@ export default function NotesGallery() {
           brains={brains}
           me={me}
         />
-        <div className="flex-1 flex flex-col overflow-auto min-w-0 p-6 gap-4">
-          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
-            <div>
-              <h1 className="text-xl font-semibold text-[var(--text1)]">All notes</h1>
-              <p className="text-sm text-[var(--text2)] mt-1">
+        <div className="flex-1 flex flex-col overflow-auto min-w-0" style={{ padding: '1.5rem', gap: '1rem' }}>
+          <div className="flex flex-col gap-3" style={{ alignItems: 'stretch' }}>
+            <div style={{ flex: 1 }}>
+              <h1 style={{ fontSize: '1.25rem', fontWeight: 600, color: 'var(--text1)', margin: 0 }}>All notes</h1>
+              <p style={{ fontSize: '0.875rem', color: 'var(--text2)', marginTop: '0.25rem' }}>
                 {total} note{total === 1 ? '' : 's'} across your brains · open to edit or delete
               </p>
             </div>
@@ -63,14 +61,13 @@ export default function NotesGallery() {
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 placeholder="Search titles and content…"
-                className="h-9 min-w-[200px] flex-1 sm:flex-none sm:w-64 px-3 rounded-lg bg-[var(--bg3)] border text-sm text-[var(--text1)] placeholder:text-[var(--text3)] focus:outline-none focus:border-[color:var(--accent-40)]"
-                style={{ borderColor: 'var(--border2)' }}
+                className="input"
+                style={{ minWidth: 200, flex: '1 1 200px', maxWidth: 320 }}
               />
               <button
                 type="button"
                 onClick={() => refetch()}
-                className="h-9 px-3 rounded-lg border text-sm text-[var(--text2)] hover:bg-[var(--bg3)]"
-                style={{ borderColor: 'var(--border2)' }}
+                className="btn btn-secondary btn-sm"
               >
                 Refresh
               </button>
@@ -78,20 +75,16 @@ export default function NotesGallery() {
           </div>
 
           {isFetching && !nodes.length ? (
-            <p className="text-sm text-[var(--text3)]">Loading…</p>
+            <p className="text-muted">Loading…</p>
           ) : nodes.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-[color:var(--hairline-strong)] p-10 text-center">
-              <p className="text-[var(--text2)]">No notes yet. Create a brain and add notes from the workspace.</p>
-              <button
-                type="button"
-                onClick={() => navigate('/home')}
-                className="mt-4 h-9 px-4 rounded-lg bg-[var(--accent)] text-white text-sm font-medium"
-              >
+            <div style={{ borderRadius: '0.75rem', border: '1px dashed var(--hairline-strong)', padding: '2.5rem', textAlign: 'center' }}>
+              <p style={{ color: 'var(--text2)' }}>No notes yet. Create a brain and add notes from the workspace.</p>
+              <button type="button" onClick={() => navigate('/home')} className="btn btn-primary" style={{ marginTop: '1rem' }}>
                 Back to home
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+            <div className="notes-gallery-grid">
               {nodes.map((n) => {
                 const iso = n.updated_at || n.created_at;
                 const dateStr = iso
@@ -100,16 +93,25 @@ export default function NotesGallery() {
                 return (
                   <article
                     key={n.id}
-                    className="rounded-xl border border-[color:var(--hairline)] bg-[var(--bg2)] p-4 flex flex-col gap-2 hover:border-[color:var(--hairline-hover)] transition-colors"
+                    style={{
+                      borderRadius: '0.75rem',
+                      border: '1px solid var(--hairline)',
+                      background: 'var(--bg2)',
+                      padding: '1rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.5rem',
+                    }}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <button
                         type="button"
                         onClick={() => navigate(`/brain/${n.brain_id}/notes/${n.id}`)}
-                        className="text-left min-w-0 flex-1"
+                        className="text-left flex-1 min-w-0"
+                        style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}
                       >
-                        <h2 className="font-medium text-[var(--text1)] truncate">{n.title || 'Untitled'}</h2>
-                        <p className="text-xs text-[var(--accent)] mt-0.5 truncate">{n.brain_name || n.brain_id}</p>
+                        <h2 style={{ fontWeight: 500, color: 'var(--text1)', margin: 0 }} className="truncate">{n.title || 'Untitled'}</h2>
+                        <p style={{ fontSize: '0.75rem', color: 'rgb(var(--accent))', marginTop: '0.125rem' }} className="truncate">{n.brain_name || n.brain_id}</p>
                       </button>
                       <button
                         type="button"
@@ -118,23 +120,25 @@ export default function NotesGallery() {
                           if (!window.confirm(`Delete “${n.title || 'Untitled'}”? This cannot be undone.`)) return;
                           deleteNode.mutate(
                             { nodeId: n.id, brainId: n.brain_id },
-                            {
-                              onSuccess: () => refetch(),
-                            }
+                            { onSuccess: () => refetch() }
                           );
                         }}
-                        className="shrink-0 text-xs font-medium text-red-400/90 hover:text-red-300 disabled:opacity-50 px-2 py-1 rounded-lg hover:bg-red-500/10"
+                        className="shrink-0 text-link text-danger"
+                        style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
                       >
                         Delete
                       </button>
                     </div>
-                    <p className="text-xs text-[var(--text2)] line-clamp-3 flex-1">{snippet(n) || '—'}</p>
-                    <div className="flex items-center justify-between gap-2 pt-1 border-t border-[color:var(--hairline-faint)]">
-                      <span className="text-[10px] mono text-[var(--text3)]">{dateStr}</span>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text2)', flex: 1, margin: 0, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                      {snippet(n) || '—'}
+                    </p>
+                    <div className="flex items-center justify-between gap-2" style={{ paddingTop: '0.25rem', borderTop: '1px solid var(--hairline-faint)' }}>
+                      <span className="mono" style={{ fontSize: '10px', color: 'var(--text3)' }}>{dateStr}</span>
                       <button
                         type="button"
                         onClick={() => navigate(`/brain/${n.brain_id}/notes/${n.id}`)}
-                        className="text-xs font-medium text-[var(--accent)] hover:underline"
+                        className="text-link"
+                        style={{ fontSize: '0.75rem', fontWeight: 500 }}
                       >
                         Open
                       </button>
@@ -146,23 +150,23 @@ export default function NotesGallery() {
           )}
 
           {totalPages > 1 ? (
-            <div className="flex items-center justify-center gap-2 pt-2">
+            <div className="flex items-center justify-center gap-2" style={{ paddingTop: '0.5rem' }}>
               <button
                 type="button"
                 disabled={page <= 1}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="h-8 px-3 rounded-lg border border-[color:var(--hairline)] text-sm disabled:opacity-40"
+                className="btn btn-secondary btn-sm"
               >
                 Previous
               </button>
-              <span className="text-xs text-[var(--text3)] mono">
+              <span className="mono text-muted" style={{ fontSize: '0.75rem' }}>
                 {page} / {totalPages}
               </span>
               <button
                 type="button"
                 disabled={page >= totalPages}
                 onClick={() => setPage((p) => p + 1)}
-                className="h-8 px-3 rounded-lg border border-[color:var(--hairline)] text-sm disabled:opacity-40"
+                className="btn btn-secondary btn-sm"
               >
                 Next
               </button>

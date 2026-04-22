@@ -1,0 +1,151 @@
+/* base vars + reset — CPSC 491 project */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Lora:ital,wght@0,400;1,400&display=swap');
+
+:root {
+  --brand-navy: 0 85 153;
+  --brand-cyan: 19 181 234;
+  --bg: 231 231 232;
+  --panel: 255 255 255;
+  --panel2: 247 248 250;
+  --border: 201 202 204;
+  --text: 33 37 41;
+  --muted: 108 117 125;
+  --accent: var(--brand-cyan);
+  --accentHover: var(--brand-navy);
+  --bg2: #ffffff;
+  --bg3: #f4f5f7;
+  --bg4: #eceef2;
+  --border2: rgba(15, 23, 42, 0.1);
+  --text1: #1a1d21;
+  --text2: #5c6370;
+  --text3: #868d9a;
+  --accent-glow: rgba(19, 181, 234, 0.16);
+  --accent-40: rgba(19, 181, 234, 0.45);
+  --accent-20: rgba(19, 181, 234, 0.22);
+  --hairline: rgba(15, 23, 42, 0.1);
+  --hairline-strong: rgba(15, 23, 42, 0.14);
+  --hairline-faint: rgba(15, 23, 42, 0.06);
+  --veil: rgba(15, 23, 42, 0.45);
+  --teal: #0d9488;
+  --teal-dim: rgba(13, 148, 136, 0.12);
+  --amber: #d97706;
+  --green: #16a34a;
+  --red: #dc2626;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', system-ui, sans-serif;
+  background: rgb(var(--bg));
+  color: var(--text1);
+}
+
+.mono {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* shared layout helpers (kept small on purpose) */
+.flex {
+  display: flex;
+}
+.flex-col {
+  flex-direction: column;
+}
+.flex-wrap {
+  flex-wrap: wrap;
+}
+.flex-1 {
+  flex: 1;
+}
+.items-center {
+  align-items: center;
+}
+.items-start {
+  align-items: flex-start;
+}
+.justify-center {
+  justify-content: center;
+}
+.justify-between {
+  justify-content: space-between;
+}
+.gap-1 {
+  gap: 0.25rem;
+}
+.gap-2 {
+  gap: 0.5rem;
+}
+.gap-3 {
+  gap: 0.75rem;
+}
+.min-h-0 {
+  min-height: 0;
+}
+.overflow-hidden {
+  overflow: hidden;
+}
+.overflow-auto {
+  overflow: auto;
+}
+.shrink-0 {
+  flex-shrink: 0;
+}
+.min-w-0 {
+  min-width: 0;
+}
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.overflow-y-auto {
+  overflow-y: auto;
+}
+.justify-end {
+  justify-content: flex-end;
+}
+.w-full {
+  width: 100%;
+}
+.text-center {
+  text-align: center;
+}
+.text-left {
+  text-align: left;
+}
+
+@media (min-width: 640px) {
+  .sm-flex {
+    display: flex;
+  }
+  .sm-hidden {
+    display: none;
+  }
+}
+@media (min-width: 768px) {
+  .md-block {
+    display: block;
+  }
+  .md-grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+  }
+}
+@media (min-width: 1024px) {
+  .lg-cal-grid {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    gap: 1rem;
+  }
+}
