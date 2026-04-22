@@ -16,12 +16,12 @@ function isDocument(file) {
 
 export default function DocumentIngestion() {
   const [searchParams] = useSearchParams();
-  const brainFromQuery = (searchParams.get('brain') || '').trim();
+  const classFromQuery = (searchParams.get('class') || searchParams.get('brain') || '').trim();
 
   const [dragActive, setDragActive] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState([]);
-  const [brains, setBrains] = useState([]);
-  const [selectedBrainId, setSelectedBrainId] = useState('');
+  const [classesList, setClassesList] = useState([]);
+  const [selectedClassId, setSelectedClassId] = useState('');
   const [ingesting, setIngesting] = useState(false);
   const [message, setMessage] = useState(null);
   const [syllabusFile, setSyllabusFile] = useState(null);
@@ -30,21 +30,21 @@ export default function DocumentIngestion() {
 
   useEffect(() => {
     api('/api/brain/list')
-      .then((r) => setBrains(r.brains || []))
-      .catch(() => setBrains([]));
+      .then((r) => setClassesList(r.brains || []))
+      .catch(() => setClassesList([]));
   }, []);
 
   useEffect(() => {
-    if (!brains.length) {
-      setSelectedBrainId('');
+    if (!classesList.length) {
+      setSelectedClassId('');
       return;
     }
-    if (brainFromQuery && brains.some((b) => b.id === brainFromQuery)) {
-      setSelectedBrainId(brainFromQuery);
+    if (classFromQuery && classesList.some((b) => b.id === classFromQuery)) {
+      setSelectedClassId(classFromQuery);
       return;
     }
-    setSelectedBrainId((prev) => (prev && brains.some((b) => b.id === prev) ? prev : brains[0].id));
-  }, [brains, brainFromQuery]);
+    setSelectedClassId((prev) => (prev && classesList.some((b) => b.id === prev) ? prev : classesList[0].id));
+  }, [classesList, classFromQuery]);
 
   function handleDrag(e) {
     e.preventDefault();
@@ -72,8 +72,8 @@ export default function DocumentIngestion() {
 
   async function handleIngest() {
     setMessage(null);
-    if (!selectedBrainId) {
-      setMessage({ error: 'Select a brain to ingest into.' });
+    if (!selectedClassId) {
+      setMessage({ error: 'Select a class to ingest into.' });
       return;
     }
     const files = selectedFiles.filter(isDocument);
@@ -85,7 +85,7 @@ export default function DocumentIngestion() {
     }
     setIngesting(true);
     try {
-      const result = await apiUpload('/api/brain/ingest', { brain_id: selectedBrainId }, files);
+      const result = await apiUpload('/api/brain/ingest', { brain_id: selectedClassId }, files);
       const nodes = result?.nodes_created ?? 0;
       const errors = result?.errors ?? [];
       const errText = errors.length ? errors.join(' ') : '';
@@ -93,7 +93,7 @@ export default function DocumentIngestion() {
       if (result?.processing) {
         window.dispatchEvent(new CustomEvent('atlus-ingest-pending', { detail: { pending: true } }));
         setMessage({
-          info: result?.message || 'Upload received. Processing runs in the background — Sources in the brain view can take several minutes to update (longer for large files).',
+          info: result?.message || 'Upload received. Processing runs in the background — Sources for this class can take several minutes to update (longer for large files).',
         });
         setSelectedFiles([]);
       } else if (errors.length > 0 && nodes === 0) {
@@ -118,8 +118,8 @@ export default function DocumentIngestion() {
   async function handleSyllabusUpload() {
     setMessage(null);
     setSyllabusResult(null);
-    if (!selectedBrainId) {
-      setMessage({ error: 'Select a brain first.' });
+    if (!selectedClassId) {
+      setMessage({ error: 'Select a class first.' });
       return;
     }
     if (!syllabusFile) {
@@ -127,7 +127,7 @@ export default function DocumentIngestion() {
       return;
     }
     try {
-      const result = await uploadSyllabus.mutateAsync({ brainId: selectedBrainId, file: syllabusFile });
+      const result = await uploadSyllabus.mutateAsync({ brainId: selectedClassId, file: syllabusFile });
       setSyllabusResult(result);
       setMessage({ success: `Parsed ${result?.count || 0} calendar event(s) from syllabus.` });
       setSyllabusFile(null);
@@ -154,9 +154,9 @@ export default function DocumentIngestion() {
         <div className="flex items-center justify-between" style={{ marginBottom: '1.5rem', flexWrap: 'wrap', gap: '0.75rem' }}>
           <h1 style={{ fontSize: '1.5rem', fontWeight: 600, margin: 0, color: 'rgb(var(--text))' }}>Document Ingestion</h1>
           <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
-            {brainFromQuery && brains.some((b) => b.id === brainFromQuery) ? (
+            {classFromQuery && classesList.some((b) => b.id === classFromQuery) ? (
               <Link
-                to={`/brain/${encodeURIComponent(brainFromQuery)}/notes`}
+                to={`/class/${encodeURIComponent(classFromQuery)}/notes`}
                 className="text-link"
                 style={{ fontSize: '0.875rem', color: 'rgb(var(--muted))' }}
               >
@@ -170,24 +170,24 @@ export default function DocumentIngestion() {
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-          {brains.length > 0 ? (
+          {classesList.length > 0 ? (
             <div className="panel-rgb">
               <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.5rem', color: 'rgb(var(--text))' }}>
-                Ingest into brain
+                Ingest into class
               </label>
               <select
-                value={selectedBrainId}
-                onChange={(e) => setSelectedBrainId(e.target.value)}
+                value={selectedClassId}
+                onChange={(e) => setSelectedClassId(e.target.value)}
                 className="input"
               >
-                {brains.map((b) => (
+                {classesList.map((b) => (
                   <option key={b.id} value={b.id}>{b.name}</option>
                 ))}
               </select>
             </div>
           ) : (
             <div className="panel-rgb">
-              <p style={{ fontSize: '0.875rem', color: 'rgb(var(--muted))', margin: 0 }}>Create a brain first in Home before uploading documents or syllabus.</p>
+              <p style={{ fontSize: '0.875rem', color: 'rgb(var(--muted))', margin: 0 }}>Create a class first in Home before uploading documents or syllabus.</p>
             </div>
           )}
 
@@ -239,7 +239,7 @@ export default function DocumentIngestion() {
             </div>
             <p style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: 'rgb(var(--muted))' }}>
               Selected: {syllabusFile?.name || 'No syllabus file selected'}
-              {selectedBrainId ? '' : ' · Select a brain above first'}
+              {selectedClassId ? '' : ' · Select a class above first'}
             </p>
             {syllabusResult?.events?.length ? (
               <div style={{ marginTop: '0.75rem', borderRadius: '0.5rem', border: '1px solid rgb(var(--border))', background: 'rgb(var(--panel2))', padding: '0.75rem' }}>
@@ -251,8 +251,8 @@ export default function DocumentIngestion() {
                     </li>
                   ))}
                 </ul>
-                <Link to={`/brain/${selectedBrainId}/calendar`} className="text-link" style={{ fontSize: '0.75rem', display: 'inline-block', marginTop: '0.5rem' }}>
-                  Open brain calendar
+                <Link to={`/class/${selectedClassId}/calendar`} className="text-link" style={{ fontSize: '0.75rem', display: 'inline-block', marginTop: '0.5rem' }}>
+                  Open class calendar
                 </Link>
               </div>
             ) : null}
@@ -288,7 +288,7 @@ export default function DocumentIngestion() {
               <button
                 type="button"
                 onClick={handleIngest}
-                disabled={ingesting || !selectedBrainId}
+                disabled={ingesting || !selectedClassId}
                 className="btn btn-primary"
                 style={{ width: '100%' }}
               >

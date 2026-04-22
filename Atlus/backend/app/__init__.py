@@ -4,12 +4,12 @@ from app.extensions import cors, db, jwt
 
 
 def _jwt_error_response(message, status=401):
-    """JWT errors as JSON so the UI can show a friendly string."""
+    # flask-jwt wants this so login errors arent ugly html page
     return jsonify({"error": message}), status
 
 
 def _apply_sqlite_compat_migrations(app):
-    """SQLite-only: add columns we added to models after the DB already existed (create_all won't)."""
+    # hack: sqlite db from week 1 missing new columns - alter table by hand
     uri = app.config.get("SQLALCHEMY_DATABASE_URI", "")
     if not str(uri).startswith("sqlite"):
         return

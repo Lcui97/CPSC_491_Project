@@ -1,4 +1,4 @@
-"""Brain routes: workspaces, uploads, OCR, syllabus, calendar, notes, search, ask."""
+# routes under /api/brain (also some /classes stuff)
 
 import mimetypes
 import os
@@ -43,7 +43,7 @@ def _get_user_or_404():
 
 
 def _classes_assistant_notes_section(brain_map: dict, brain_ids: list, *, max_chars: int = 12000, per_note_cap: int = 3200) -> str:
-    """Recent user notes / scans / textbook chunks across all class brains (excludes syllabus nodes)."""
+    # grabs recent notes from all ur classes for the planner bot (skip syllabus-only junk)
     rows = (
         Node.query.filter(Node.brain_id.in_(brain_ids))
         .filter(
@@ -78,7 +78,7 @@ def _classes_assistant_notes_section(brain_map: dict, brain_ids: list, *, max_ch
 
 
 def _datetime_anchor_block(now_utc=None) -> str:
-    """Private context for the model: current moment for interpreting 'today' / 'this week'. Not for user-facing copy."""
+    # datetime junk for the backend prompt so it knows what "today" is - not shown to user
     if now_utc is None:
         now_utc = datetime.now(timezone.utc)
     tz_name = (os.environ.get("ATLUS_TIMEZONE") or "UTC").strip() or "UTC"
@@ -104,7 +104,7 @@ def _datetime_anchor_block(now_utc=None) -> str:
 
 
 def _brain_for_user(brain_id, user_id):
-    """Return brain if user owns it or is a collaborator."""
+    # None if wrong person
     brain = Brain.query.filter_by(id=brain_id).first()
     if not brain:
         return None
@@ -120,7 +120,7 @@ def _upload_root():
 
 
 def _persist_upload_bytes(brain_id: str, filename: str, data: bytes) -> str:
-    """Save uploaded bytes under uploads/<brain_id>/ and return relative path."""
+    # dumps bytes into uploads/{id}/whatever
     upload_root = _upload_root()
     brain_dir = upload_root / brain_id
     brain_dir.mkdir(parents=True, exist_ok=True)
@@ -183,7 +183,7 @@ def _class_to_json(brain: Brain, profile: CourseProfile | None, event_count: int
 
 
 def _extract_syllabus_sections(text: str):
-    """Lightweight section extraction for syllabus preview cards."""
+    # hacky regex to grab a few headings for preview - not perfect
     raw = (text or "").strip()
     if not raw:
         return []
@@ -212,7 +212,7 @@ def _extract_syllabus_sections(text: str):
 
 
 def _syllabus_node_markdown(text: str):
-    """Best-effort LLM formatting; always falls back to extracted text."""
+    # tries openai prettify then gives up and uses raw text
     source = (text or "").strip()
     if not source:
         return ""
@@ -256,7 +256,7 @@ def _parse_datetime_value(value):
     return dt.astimezone(timezone.utc)
 
 
-# Create brain — JSON or multipart; optional files[] ingested right after (SQLite can't background this).
+# new workspace - json or multipart. sqlite cant really thread file ingest so sometimes its sync
 @bp.route("/brain/create", methods=["POST"])
 @jwt_required()
 def create_brain():
@@ -264,7 +264,7 @@ def create_brain():
     if not user:
         return jsonify({"error": "user not found"}), 404
 
-    # JSON body or multipart with files
+    # json vs form upload
     if request.is_json:
         data = request.get_json() or {}
         name = (data.get("name") or "").strip() or "New Brain"
@@ -286,7 +286,7 @@ def create_brain():
     except Exception:
         pass
 
-    # Buffer uploads before responding — the request body isn't usable after return.
+    # read files now bc after we return the stream is gone
     if files:
         import io
         file_payloads = []
@@ -297,9 +297,9 @@ def create_brain():
                 data = f.read()
                 if not data:
                     continue
-                # Fake FileStorage shape for the pipeline
+                # pipeline wants something file-like
                 obj = type("FileLike", (), {"filename": f.filename, "stream": io.BytesIO(data)})()
-                obj.read = lambda d=data: d  # bound copy per file
+                obj.read = lambda d=data: d  # each file keeps its own bytes
                 file_payloads.append(obj)
             except Exception:
                 continue
@@ -308,7 +308,7 @@ def create_brain():
             user_id_copy = user.id
             uri = (current_app.config.get("SQLALCHEMY_DATABASE_URI") or "").lower()
             if "sqlite" in uri:
-                # SQLite + concurrent writers → "database is locked"; ingest inline here.
+                # sqlite freaks out if two threads write - just do it here
                 try:
                     from app.services.ingestion_pipeline import process_creation_files
                     process_creation_files(brain_id_copy, user_id_copy, file_payloads)
@@ -337,7 +337,7 @@ def create_brain():
     }), 201
 
 
-# Ingest files into an existing brain; the heavy lifting runs in a background thread.
+# upload more pdf/images into a class thats already there (thread does the hard part)
 @bp.route("/brain/ingest", methods=["POST"])
 @jwt_required()
 def ingest():
@@ -421,7 +421,7 @@ def ingest():
     }), 200
 
 
-# OCR upload → markdown for the split editor; images may be saved as a source file.
+# scan/pic -> markdown for split view, maybe saves source row too
 @bp.route("/brain/ocr", methods=["POST"])
 @jwt_required()
 def ocr():
@@ -490,7 +490,7 @@ def ocr():
         return jsonify({"error": str(e)}), 500
 
 
-# Stream an uploaded scan/image (auth + brain access).
+# send back the raw uploaded file if ur allowed to see that class
 @bp.route("/brain/<brain_id>/sources/<int:source_id>/file", methods=["GET"])
 @jwt_required()
 def serve_source_file(brain_id, source_id):
@@ -516,7 +516,7 @@ def serve_source_file(brain_id, source_id):
     return send_file(path, mimetype=mime, as_attachment=False, download_name=src.filename or "scan.png")
 
 
-# Turn chunks or a single markdown blob into nodes (embeddings + DB rows).
+# chunk/pdf text -> vector + db nodes
 @bp.route("/brain/generate-nodes", methods=["POST"])
 @jwt_required()
 def generate_nodes():
@@ -556,7 +556,7 @@ def generate_nodes():
         return jsonify({"error": str(e)}), 500
 
 
-# List brains you own plus any you joined.
+# sidebar list - yours + shared w u
 @bp.route("/brain/list", methods=["GET"])
 @jwt_required()
 def list_brains():
@@ -603,7 +603,7 @@ def list_brains():
     }), 200
 
 
-# Collaborator leaves a shared brain (owners delete instead).
+# bail out of a shared class (owner has to delete not leave)
 @bp.route("/brain/<brain_id>/leave", methods=["POST"])
 @jwt_required()
 def leave_brain(brain_id):
@@ -623,7 +623,7 @@ def leave_brain(brain_id):
     return jsonify({"ok": True}), 200
 
 
-# Hard delete a brain: DB rows, disk uploads, vector namespace.
+# nuke everything for a class u own
 @bp.route("/brain/<brain_id>", methods=["DELETE"])
 @jwt_required()
 def delete_brain(brain_id):
@@ -673,7 +673,7 @@ def delete_brain(brain_id):
     return jsonify({"ok": True, "id": brain_id}), 200
 
 
-# Owner generates a share token.
+# make invite link token
 @bp.route("/brain/<brain_id>/share-link", methods=["POST"])
 @jwt_required()
 def create_brain_share_link(brain_id):
@@ -690,7 +690,7 @@ def create_brain_share_link(brain_id):
     return jsonify({"token": token, "share_path": f"/shared/{token}"}), 201
 
 
-# Public: brain name/badge for the join landing page.
+# no login - shows class name on share page
 @bp.route("/share/brain/<token>", methods=["GET"])
 def public_share_brain_info(token):
     link = BrainShareLink.query.filter_by(token=token).first()
@@ -708,7 +708,7 @@ def public_share_brain_info(token):
     }), 200
 
 
-# Accept invite and add yourself as collaborator.
+# logged in user joins via token
 @bp.route("/share/brain/<token>/join", methods=["POST"])
 @jwt_required()
 def join_shared_brain(token):
@@ -730,7 +730,7 @@ def join_shared_brain(token):
     return jsonify({"ok": True, "brain_id": brain.id, "role": "collaborator"}), 200
 
 
-# Uploaded sources metadata for one brain.
+# list uploaded files metadata
 @bp.route("/brain/<brain_id>/sources", methods=["GET"])
 @jwt_required()
 def get_brain_sources(brain_id):
@@ -755,7 +755,7 @@ def get_brain_sources(brain_id):
     }), 200
 
 
-# Drop a source file; notes stay but lose their source link.
+# delete uploaded file row (notes unlink)
 @bp.route("/brain/<brain_id>/sources/<int:source_id>", methods=["DELETE"])
 @jwt_required()
 def delete_brain_source(brain_id, source_id):
@@ -781,7 +781,7 @@ def delete_brain_source(brain_id, source_id):
     return jsonify({"ok": True}), 200
 
 
-# Syllabus file → extracted calendar events (saved immediately).
+# syllabus pdf -> scrape due dates etc into calendar table
 @bp.route("/brain/syllabus", methods=["POST"])
 @jwt_required()
 def upload_syllabus():
@@ -817,7 +817,7 @@ def upload_syllabus():
         db.session.add(source_file)
         db.session.flush()
 
-        # Keep full extracted syllabus text as a note node for richer assistant context.
+        # stash whole syllabus text as a fake note too so assistant can read it
         db.session.add(
             Node(
                 id=str(uuid.uuid4()),
@@ -859,7 +859,7 @@ def upload_syllabus():
         return jsonify({"error": str(e)}), 500
 
 
-# List all classes (brains) with class metadata + event counts.
+# home page grid - profiles + how many calendar things
 @bp.route("/classes", methods=["GET"])
 @jwt_required()
 def list_classes():
@@ -887,7 +887,7 @@ def list_classes():
     return jsonify({"classes": classes}), 200
 
 
-# Create class manually (without syllabus).
+# type in class info yourself
 @bp.route("/classes/manual", methods=["POST"])
 @jwt_required()
 def create_class_manual():
@@ -909,7 +909,7 @@ def create_class_manual():
     return jsonify({"class": _class_to_json(brain, profile, 0)}), 201
 
 
-# Edit class metadata/title manually.
+# edit title / professor fields
 @bp.route("/classes/<brain_id>", methods=["PUT"])
 @jwt_required()
 def update_class(brain_id):
@@ -932,7 +932,7 @@ def update_class(brain_id):
     return jsonify({"class": _class_to_json(brain, profile, event_count)}), 200
 
 
-# Create class from syllabus upload; auto-extract profile + events.
+# syllabus upload makes class + parses schedule
 @bp.route("/classes/syllabus", methods=["POST"])
 @jwt_required()
 def create_class_from_syllabus():
@@ -1021,7 +1021,7 @@ def create_class_from_syllabus():
         return jsonify({"error": str(e)}), 500
 
 
-# Preview extracted syllabus sections for one class.
+# json for the preview cards when u pick a class
 @bp.route("/classes/<brain_id>/syllabus-preview", methods=["GET"])
 @jwt_required()
 def class_syllabus_preview(brain_id):
@@ -1059,7 +1059,7 @@ def class_syllabus_preview(brain_id):
     ), 200
 
 
-# Ask across classes (all brains) using notes + class calendar context.
+# planner bot sees all ur classes at once
 @bp.route("/classes/assistant", methods=["POST"])
 @jwt_required()
 def classes_assistant():
@@ -1105,7 +1105,7 @@ def classes_assistant():
             f"meets={p.meeting_days or 'n/a'} {p.meeting_time or ''}, room={p.classroom or 'n/a'}, office_hours={p.office_hours or 'n/a'}"
         )
 
-    # Include syllabus text snippets so assistant can answer class-detail questions.
+    # paste syllabus blobs in too
     syllabus_nodes = (
         Node.query.filter(Node.brain_id.in_(brain_ids))
         .filter(Node.node_type == "syllabus")
@@ -1166,7 +1166,7 @@ def classes_assistant():
         return jsonify({"response": "Here are your upcoming items:\n" + "\n".join(lines)}), 200
 
 
-# Filter calendar events for one brain (optional date range + type).
+# calendar events for ONE class + filters
 @bp.route("/brain/<brain_id>/calendar-events", methods=["GET"])
 @jwt_required()
 def get_brain_calendar_events(brain_id):
@@ -1192,7 +1192,7 @@ def get_brain_calendar_events(brain_id):
     return jsonify({"events": [_event_to_json(e) for e in events]}), 200
 
 
-# Add a calendar row by hand.
+# user typed a due date row
 @bp.route("/brain/<brain_id>/calendar-events", methods=["POST"])
 @jwt_required()
 def create_brain_calendar_event(brain_id):
@@ -1226,7 +1226,7 @@ def create_brain_calendar_event(brain_id):
     return jsonify(_event_to_json(ev)), 201
 
 
-# Patch an existing event.
+# edit due date row
 @bp.route("/brain/<brain_id>/calendar-events/<int:event_id>", methods=["PUT"])
 @jwt_required()
 def update_brain_calendar_event(brain_id, event_id):
@@ -1270,7 +1270,7 @@ def update_brain_calendar_event(brain_id, event_id):
     return jsonify(_event_to_json(ev)), 200
 
 
-# Remove one event.
+# delete assignment row
 @bp.route("/brain/<brain_id>/calendar-events/<int:event_id>", methods=["DELETE"])
 @jwt_required()
 def delete_brain_calendar_event(brain_id, event_id):
@@ -1288,7 +1288,7 @@ def delete_brain_calendar_event(brain_id, event_id):
     return jsonify({"ok": True, "id": event_id}), 200
 
 
-# All upcoming deadlines across brains you can see.
+# merged calendar - owned + shared classes
 @bp.route("/calendar-events", methods=["GET"])
 @jwt_required()
 def get_global_calendar_events():
@@ -1327,7 +1327,7 @@ def get_global_calendar_events():
     ), 200
 
 
-# Ask the model with note + calendar context (modes, time windows, etc.).
+# chat w ur notes for one class (modes like summary etc)
 @bp.route("/brain/<brain_id>/ask", methods=["POST"])
 @jwt_required()
 def ask_brain_route(brain_id):
@@ -1411,7 +1411,7 @@ def ask_brain_route(brain_id):
         return jsonify({"error": str(e)}), 500
 
 
-# Simple ILIKE search across your notes.
+# ctrl+k search bar thing
 @bp.route("/brain/search", methods=["GET"])
 @jwt_required()
 def search():
@@ -1457,7 +1457,7 @@ def search():
     }), 200
 
 
-# Paginated note list with optional search/sort/tag.
+# sidebar note list w paging
 @bp.route("/brain/<brain_id>/nodes", methods=["GET"])
 @jwt_required()
 def get_brain_nodes(brain_id):
@@ -1506,7 +1506,7 @@ def get_brain_nodes(brain_id):
     }), 200
 
 
-# Create a new note in this brain.
+# blank note POST
 @bp.route("/brain/<brain_id>/nodes", methods=["POST"])
 @jwt_required()
 def create_node(brain_id):
@@ -1565,7 +1565,7 @@ def _node_for_user(node_id, user_id):
     return node if brain else None
 
 
-# Fetch one note.
+# load single note by id
 @bp.route("/nodes/<node_id>", methods=["GET"])
 @jwt_required()
 def get_node(node_id):
@@ -1578,7 +1578,7 @@ def get_node(node_id):
     return jsonify(_node_to_json(node)), 200
 
 
-# Save edits to a note.
+# autosave / save markdown
 @bp.route("/nodes/<node_id>", methods=["PUT"])
 @jwt_required()
 def update_node(node_id):
@@ -1605,7 +1605,7 @@ def update_node(node_id):
     return jsonify(_node_to_json(node)), 200
 
 
-# Delete note; best-effort cleanup of legacy Pinecone rows if any.
+# trash note + try delete old pinecone junk
 @bp.route("/nodes/<node_id>", methods=["DELETE"])
 @jwt_required()
 def delete_node(node_id):

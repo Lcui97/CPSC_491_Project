@@ -32,7 +32,7 @@ function classLabel(cls) {
 }
 
 export default function CalendarPage() {
-  const { brainId: routeBrainId } = useParams();
+  const { classId: routeClassId } = useParams();
   const queryClient = useQueryClient();
   const { data: classes = [] } = useClasses();
 
@@ -41,7 +41,7 @@ export default function CalendarPage() {
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
   const [selectedDateKey, setSelectedDateKey] = useState(() => dateKeyFromIso(new Date().toISOString()));
-  const [targetBrainId, setTargetBrainId] = useState('');
+  const [targetClassId, setTargetClassId] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState({
@@ -53,15 +53,15 @@ export default function CalendarPage() {
   });
 
   useEffect(() => {
-    if (routeBrainId) setTargetBrainId(routeBrainId);
-  }, [routeBrainId]);
+    if (routeClassId) setTargetClassId(routeClassId);
+  }, [routeClassId]);
 
   useEffect(() => {
-    if (!targetBrainId && classes.length > 0) {
-      const pick = routeBrainId && classes.some((c) => c.id === routeBrainId) ? routeBrainId : classes[0].id;
-      setTargetBrainId(pick);
+    if (!targetClassId && classes.length > 0) {
+      const pick = routeClassId && classes.some((c) => c.id === routeClassId) ? routeClassId : classes[0].id;
+      setTargetClassId(pick);
     }
-  }, [classes, targetBrainId, routeBrainId]);
+  }, [classes, targetClassId, routeClassId]);
 
   const monthRange = useMemo(() => {
     const y = monthCursor.getFullYear();
@@ -142,7 +142,7 @@ export default function CalendarPage() {
 
   const palette = ['#3B82F6', '#16A34A', '#334155', '#0F766E', '#1D4ED8', '#6D28D9', '#BE123C'];
 
-  const brainColor = useMemo(() => {
+  const classColor = useMemo(() => {
     const map = new Map();
     classes.forEach((c, idx) => {
       map.set(c.id, palette[idx % palette.length]);
@@ -157,7 +157,7 @@ export default function CalendarPage() {
 
   async function submitForm(e) {
     e.preventDefault();
-    const brainId = editingId ? null : targetBrainId;
+    const brainId = editingId ? null : targetClassId;
     if (!form.title.trim() || !form.due_at) return;
     const body = {
       title: form.title.trim(),
@@ -179,7 +179,7 @@ export default function CalendarPage() {
 
   function startEdit(ev) {
     setEditingId(ev.id);
-    setTargetBrainId(ev.brain_id);
+    setTargetClassId(ev.brain_id);
     setForm({
       title: ev.title || '',
       event_type: ev.event_type || 'other',
@@ -189,8 +189,8 @@ export default function CalendarPage() {
     });
   }
 
-  const selectedClass = classes.find((c) => c.id === targetBrainId);
-  const subtitle = routeBrainId && selectedClass ? classLabel(selectedClass) : 'All classes';
+  const selectedClass = classes.find((c) => c.id === targetClassId);
+  const subtitle = routeClassId && selectedClass ? classLabel(selectedClass) : 'All classes';
   const todayKey = dateKeyFromIso(new Date().toISOString());
 
   return (
@@ -216,10 +216,10 @@ export default function CalendarPage() {
             </span>
             <select
               className="select"
-              value={targetBrainId}
-              onChange={(e) => setTargetBrainId(e.target.value)}
-              disabled={!!routeBrainId}
-              title={routeBrainId ? 'Calendar for this class' : 'Choose which class new events belong to'}
+              value={targetClassId}
+              onChange={(e) => setTargetClassId(e.target.value)}
+              disabled={!!routeClassId}
+              title={routeClassId ? 'Calendar for this class' : 'Choose which class new events belong to'}
             >
               {classes.length === 0 ? (
                 <option value="">No classes — add one from home</option>
@@ -314,7 +314,7 @@ export default function CalendarPage() {
                           <span
                             key={ev.id}
                             className="cal-dot"
-                            style={{ background: brainColor.get(ev.brain_id) || '#64748b' }}
+                            style={{ background: classColor.get(ev.brain_id) || '#64748b' }}
                           />
                         ))}
                       </span>
@@ -344,7 +344,7 @@ export default function CalendarPage() {
                   {selectedDayEvents.map((ev) => (
                     <li key={ev.id}>
                       <div className="cal-page-day-row">
-                        <span className="cal-dot" style={{ background: brainColor.get(ev.brain_id) || '#64748b' }} />
+                        <span className="cal-dot" style={{ background: classColor.get(ev.brain_id) || '#64748b' }} />
                         <div className="cal-page-day-body">
                           <strong>{ev.title}</strong>
                           <span className="text-muted" style={{ fontSize: '0.75rem' }}>
@@ -424,7 +424,7 @@ export default function CalendarPage() {
                   disabled={
                     createMutation.isPending ||
                     updateMutation.isPending ||
-                    (!editingId && !targetBrainId)
+                    (!editingId && !targetClassId)
                   }
                 >
                   {editingId ? 'Update event' : 'Add event'}

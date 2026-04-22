@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAssistantPanel } from '../../context/AssistantPanelContext';
 import ClassAssistantChat, { IconAssistantPerson } from './ClassAssistantChat';
 
-/** Fixed right dock: resize by dragging the left edge; minimize to a slim rail. */
+// assistant drawer on the right u can drag wider
 export default function AssistantSlidePanel() {
   const navigate = useNavigate();
   const {

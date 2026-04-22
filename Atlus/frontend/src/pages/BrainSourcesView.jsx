@@ -6,13 +6,13 @@ import { useBrains, useBrainSources, useDeleteSource } from '../api/brainQueries
 
 const API_URL = import.meta.env.VITE_API_URL ?? '';
 
-function useAuthFileUrl(brainId, sourceId, enabled, sourceFileType) {
+function useAuthFileUrl(classId, sourceId, enabled, sourceFileType) {
   const [url, setUrl] = useState(null);
   const [err, setErr] = useState(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!enabled || !brainId || !sourceId) {
+    if (!enabled || !classId || !sourceId) {
       setUrl(null);
       setErr(null);
       return;
@@ -24,7 +24,7 @@ function useAuthFileUrl(brainId, sourceId, enabled, sourceFileType) {
     setErr(null);
     (async () => {
       try {
-        const res = await fetch(`${API_URL}/api/brain/${brainId}/sources/${sourceId}/file`, {
+        const res = await fetch(`${API_URL}/api/brain/${classId}/sources/${sourceId}/file`, {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         });
         if (!res.ok) throw new Error('Could not load file');
@@ -47,26 +47,26 @@ function useAuthFileUrl(brainId, sourceId, enabled, sourceFileType) {
       revoked = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [brainId, sourceId, enabled, sourceFileType]);
+  }, [classId, sourceId, enabled, sourceFileType]);
 
   return { url, err, loading };
 }
 
 export default function BrainSourcesView() {
-  const { brainId } = useParams();
+  const { classId } = useParams();
   const navigate = useNavigate();
-  const { data: brains = [] } = useBrains();
-  const { data: sources = [], isFetching, refetch } = useBrainSources(brainId);
-  const deleteSource = useDeleteSource(brainId);
+  const { data: classes = [] } = useBrains();
+  const { data: sources = [], isFetching, refetch } = useBrainSources(classId);
+  const deleteSource = useDeleteSource(classId);
 
   const [preview, setPreview] = useState(null);
-  const brainName = brains.find((b) => b.id === brainId)?.name || 'Brain';
+  const classTitle = classes.find((b) => b.id === classId)?.name || 'Class';
 
   const open = preview?.id;
   const isImage = preview?.file_type === 'image';
   const isPdf = preview?.file_type === 'pdf';
   const { url, err, loading } = useAuthFileUrl(
-    brainId,
+    classId,
     open,
     !!open && !!preview?.has_file,
     preview?.file_type
@@ -87,21 +87,21 @@ export default function BrainSourcesView() {
 
   return (
     <div className="note-page">
-      <TopBar compact breadcrumb={`Home › ${brainName} › Sources`} />
+      <TopBar compact breadcrumb={`Home › ${classTitle} › Sources`} />
       <BrainExplorerHeader
         title="Sources"
         right={
           <div className="explorer-header-actions">
             <button
               type="button"
-              onClick={() => navigate(`/ingest?brain=${encodeURIComponent(brainId)}`)}
+              onClick={() => navigate(`/ingest?class=${encodeURIComponent(classId)}`)}
               className="text-link"
             >
               Upload
             </button>
             <button
               type="button"
-              onClick={() => navigate(`/brain/${brainId}/notes`)}
+              onClick={() => navigate(`/class/${classId}/notes`)}
               className="text-link"
             >
               Notes workspace
@@ -111,7 +111,7 @@ export default function BrainSourcesView() {
       />
       <main style={{ flex: 1, overflow: 'auto', padding: '1.5rem', maxWidth: '48rem', margin: '0 auto', width: '100%' }}>
         <p style={{ fontSize: '0.875rem', color: 'var(--text2)', marginBottom: '1rem' }}>
-          Files and scans attached to this brain. Images open in the preview; PDFs open in a new tab.
+          Files and scans attached to this class. Images open in the preview; PDFs open in a new tab.
         </p>
         <button
           type="button"
@@ -153,7 +153,7 @@ export default function BrainSourcesView() {
                   type="button"
                   disabled={deleteSource.isPending}
                   onClick={() => {
-                    if (!window.confirm(`Remove “${s.filename}” from this brain?`)) return;
+                    if (!window.confirm(`Remove “${s.filename}” from this class?`)) return;
                     deleteSource.mutate(s.id);
                     if (preview?.id === s.id) setPreview(null);
                   }}

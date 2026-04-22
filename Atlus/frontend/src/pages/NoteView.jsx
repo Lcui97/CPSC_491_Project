@@ -11,7 +11,7 @@ import BrainExplorerHeader from '../components/note/BrainExplorerHeader';
 const DEFAULT_TITLE = 'Untitled';
 
 export default function NoteView() {
-  const { brainId, nodeId } = useParams();
+  const { classId, nodeId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
   const [title, setTitle] = useState('');
@@ -22,13 +22,13 @@ export default function NoteView() {
   const { data: node } = useNode(nodeId);
   const updateMutation = useUpdateNode(nodeId);
   const { data: brains = [] } = useBrains();
-  const { data: listData } = useBrainNodes(brainId, { page: 1, per_page: 1 });
-  const { data: sources = [] } = useBrainSources(brainId);
+  const { data: listData } = useBrainNodes(classId, { page: 1, per_page: 1 });
+  const { data: sources = [] } = useBrainSources(classId);
   const deleteNode = useDeleteNode();
 
   const displayNode = node || null;
-  const brainName = brains.find((b) => b.id === brainId)?.name || 'Your brain';
-  const totalNotesInBrain = listData?.total ?? 0;
+  const classTitle = brains.find((b) => b.id === classId)?.name || 'Your class';
+  const totalNotesInClass = listData?.total ?? 0;
   const sourceMeta =
     displayNode?.source_file_id != null ? sources.find((s) => s.id === displayNode.source_file_id) : null;
   const sourceFileName = sourceMeta?.filename || '';
@@ -85,12 +85,12 @@ export default function NoteView() {
       }
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
-        navigate(`/brain/${brainId}/notes`);
+        navigate(`/class/${classId}/notes`);
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [nodeId, localContent, title, brainId, navigate, updateMutation]);
+  }, [nodeId, localContent, title, classId, navigate, updateMutation]);
 
   const dateLabel =
     displayNode?.updated_at || displayNode?.created_at
@@ -103,23 +103,23 @@ export default function NoteView() {
 
   return (
     <div className="note-page">
-      <TopBar compact breadcrumb={`Home › ${brainName} › Notes`} />
+      <TopBar compact breadcrumb={`Home › ${classTitle} › Notes`} />
       <BrainExplorerHeader
         title={displayNode?.title || (nodeId ? 'Note' : null)}
-        backHref={nodeId && brainId ? `/brain/${brainId}/notes` : undefined}
+        backHref={nodeId && classId ? `/class/${classId}/notes` : undefined}
         backTitle={nodeId ? 'Back to class notes' : undefined}
         right={
           <div className="explorer-header-actions">
             <button
               type="button"
-              onClick={() => navigate(`/ingest?brain=${encodeURIComponent(brainId)}`)}
+              onClick={() => navigate(`/ingest?class=${encodeURIComponent(classId)}`)}
               className="text-link"
             >
               Upload
             </button>
             <button
               type="button"
-              onClick={() => navigate(`/brain/${brainId}/sources`)}
+              onClick={() => navigate(`/class/${classId}/sources`)}
               className="text-link"
             >
               Sources
@@ -131,9 +131,9 @@ export default function NoteView() {
                 onClick={() => {
                   if (!window.confirm(`Delete this note? This cannot be undone.`)) return;
                   deleteNode.mutate(
-                    { nodeId, brainId },
+                    { nodeId, brainId: classId },
                     {
-                      onSuccess: () => navigate(`/brain/${brainId}/notes`),
+                      onSuccess: () => navigate(`/class/${classId}/notes`),
                     }
                   );
                 }}
@@ -152,7 +152,7 @@ export default function NoteView() {
           {nodeId ? (
             showHandwrittenSplit ? (
               <HandwrittenSplitEditor
-                brainId={brainId}
+                classId={classId}
                 sourceFileId={displayNode.source_file_id}
                 filename={sourceFileName}
                 fileType={sourceMeta?.file_type === 'pdf' ? 'pdf' : 'image'}
@@ -168,7 +168,7 @@ export default function NoteView() {
                   }}
                   sourceLabel={sourceFileName}
                   saveStatus={updateMutation.isPending ? 'saving' : 'saved'}
-                  totalNotesInBrain={totalNotesInBrain}
+                  totalNotesInClass={totalNotesInClass}
                   value={localContent}
                   onChange={handleContentChange}
                   onSave={handleSaveContent}
@@ -186,14 +186,14 @@ export default function NoteView() {
                 }}
                 sourceLabel={sourceFileName}
                 saveStatus={updateMutation.isPending ? 'saving' : 'saved'}
-                totalNotesInBrain={totalNotesInBrain}
+                totalNotesInClass={totalNotesInClass}
                 value={localContent}
                 onChange={handleContentChange}
                 onSave={handleSaveContent}
               />
             )
           ) : (
-            <BrainLanding brainName={brainName} />
+            <BrainLanding classTitle={classTitle} />
           )}
         </main>
       </div>

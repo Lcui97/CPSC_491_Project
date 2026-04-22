@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { useBrainAsk } from '../../api/brainQueries';
 
-/** Notes + calendar context chat for whichever brain is selected (same /ask API as elsewhere). */
+// chat box on home that asks ur notes for whatever class is picked
 export default function HomeNotesChat({ activeBrain, brains = [], onSelectBrain }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -11,10 +11,10 @@ export default function HomeNotesChat({ activeBrain, brains = [], onSelectBrain 
   const bottomRef = useRef(null);
   const recognitionRef = useRef(null);
 
-  const effectiveBrainId = activeBrain?.id || brains[0]?.id || '';
+  const effectiveClassId = activeBrain?.id || brains[0]?.id || '';
   const contextName = activeBrain?.name || brains[0]?.name || 'your notes';
 
-  const askMutation = useBrainAsk(effectiveBrainId);
+  const askMutation = useBrainAsk(effectiveClassId);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -39,7 +39,7 @@ export default function HomeNotesChat({ activeBrain, brains = [], onSelectBrain 
       const userPrompt =
         text ||
         (mode === 'summary' ? 'Summarize my notes.' : mode === 'study_guide' ? 'Create a study guide.' : 'List key points.');
-      if (!effectiveBrainId && !text) return;
+      if (!effectiveClassId && !text) return;
 
       setInput('');
       setMessages((prev) => [...prev, { role: 'user', content: userPrompt }]);
@@ -55,7 +55,7 @@ export default function HomeNotesChat({ activeBrain, brains = [], onSelectBrain 
         ]);
       }
     },
-    [askMutation, effectiveBrainId, input]
+    [askMutation, effectiveClassId, input]
   );
 
   function handleSubmit(e) {
@@ -95,12 +95,12 @@ export default function HomeNotesChat({ activeBrain, brains = [], onSelectBrain 
           <h2 className="home-chat-title">Talk to your notes</h2>
           <p className="home-chat-sub">
             Context: <span className="accent">{contextName}</span>
-            {brains.length > 1 ? ' — click a brain in the sidebar or pick below' : ''}
+            {brains.length > 1 ? ' — click a class in the sidebar or pick below' : ''}
           </p>
         </div>
         {brains.length > 1 && onSelectBrain ? (
           <select
-            value={effectiveBrainId}
+            value={effectiveClassId}
             onChange={(e) => {
               const b = brains.find((x) => x.id === e.target.value);
               if (b) onSelectBrain(b);
@@ -138,17 +138,17 @@ export default function HomeNotesChat({ activeBrain, brains = [], onSelectBrain 
       <div className="home-chat-scroll">
         {brains.length === 0 ? (
           <p style={{ fontSize: '0.875rem', color: 'var(--text3)', textAlign: 'center', padding: '0 0 2rem' }}>
-            Create a brain from the sidebar to ask questions about your notes.
+            Create a class from the sidebar to ask questions about your notes.
           </p>
-        ) : !effectiveBrainId ? (
-          <p style={{ fontSize: '0.875rem', color: 'var(--text3)', textAlign: 'center', padding: '0 0 2rem' }}>Loading brains…</p>
+        ) : !effectiveClassId ? (
+          <p style={{ fontSize: '0.875rem', color: 'var(--text3)', textAlign: 'center', padding: '0 0 2rem' }}>Loading classes…</p>
         ) : messages.length === 0 ? (
           <div className="text-center" style={{ padding: '1.5rem 0.5rem' }}>
             <p style={{ fontSize: '0.875rem', color: 'var(--text2)', margin: '0 0 0.25rem' }}>
               Ask anything about notes in <span style={{ color: 'rgb(var(--accent))' }}>{contextName}</span>.
             </p>
             <p style={{ fontSize: '0.75rem', color: 'var(--text3)', margin: 0 }}>
-              Uses that brain’s notes on the server (needs{' '}
+              Uses that class’s notes on the server (needs{' '}
               <code style={{ fontSize: 10, padding: '0.1rem 0.25rem', borderRadius: 4, background: 'var(--bg4)' }}>OPENAI_API_KEY</code>{' '}
               on the backend).
             </p>
@@ -193,7 +193,7 @@ export default function HomeNotesChat({ activeBrain, brains = [], onSelectBrain 
             <button
               key={`${mode}-${idx}`}
               type="button"
-              disabled={!effectiveBrainId || askMutation.isPending}
+              disabled={!effectiveClassId || askMutation.isPending}
               onClick={() => send(mode, prompt || null, extra || {})}
               className="home-chat-chip"
             >
@@ -212,13 +212,13 @@ export default function HomeNotesChat({ activeBrain, brains = [], onSelectBrain 
                 handleSubmit(e);
               }
             }}
-            placeholder={effectiveBrainId ? 'Message your notes…' : 'Select a brain first…'}
-            disabled={!effectiveBrainId || askMutation.isPending}
+            placeholder={effectiveClassId ? 'Message your notes…' : 'Select a class first…'}
+            disabled={!effectiveClassId || askMutation.isPending}
             className="home-chat-textarea"
           />
           <button
             type="submit"
-            disabled={!effectiveBrainId || !input.trim() || askMutation.isPending}
+            disabled={!effectiveClassId || !input.trim() || askMutation.isPending}
             className="home-chat-send"
             title="Send"
           >

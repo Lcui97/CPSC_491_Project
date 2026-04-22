@@ -2,24 +2,24 @@ import { Link, useParams } from 'react-router-dom';
 import { useBrainSources, useDeleteSource, useBrains } from '../../api/brainQueries';
 import BrainHandwrittenUpload from './BrainHandwrittenUpload';
 
-/** `brainName` from parent keeps the greeting aligned with the rest of NoteView when provided. */
-export default function BrainLanding({ brainName: brainNameProp }) {
-  const { brainId } = useParams();
+// parent can pass classTitle so the welcome matches the header
+export default function BrainLanding({ classTitle: classTitleProp }) {
+  const { classId } = useParams();
 
-  const { data: brains = [] } = useBrains();
+  const { data: classes = [] } = useBrains();
   const resolvedName =
-    brainNameProp?.trim() ||
-    brains.find((b) => String(b.id) === String(brainId))?.name?.trim() ||
+    classTitleProp?.trim() ||
+    classes.find((b) => String(b.id) === String(classId))?.name?.trim() ||
     null;
 
-  const { data: sources = [], refetch: refetchSources, isFetching: sourcesFetching } = useBrainSources(brainId);
-  const deleteSource = useDeleteSource(brainId);
+  const { data: sources = [], refetch: refetchSources, isFetching: sourcesFetching } = useBrainSources(classId);
+  const deleteSource = useDeleteSource(classId);
 
   const welcomeTitle = resolvedName ? `Welcome to ${resolvedName}` : 'Welcome';
 
   return (
-    <div className="brain-landing-wrap">
-      <div className="brain-landing-inner">
+    <div className="class-landing-wrap">
+      <div className="class-landing-inner">
         <section>
           <h1 style={{ fontSize: '1.25rem', fontWeight: 600, color: 'rgb(var(--text))', margin: '0 0 0.5rem' }}>
             {welcomeTitle}
@@ -29,13 +29,13 @@ export default function BrainLanding({ brainName: brainNameProp }) {
           </p>
         </section>
 
-        <BrainHandwrittenUpload brainId={brainId} />
+        <BrainHandwrittenUpload classId={classId} />
 
         <section className="panel-rgb" style={{ marginTop: '1.5rem' }}>
           <div className="flex items-center justify-between gap-2" style={{ marginBottom: '0.5rem' }}>
-            <h2 style={{ margin: 0, fontSize: '0.875rem', fontWeight: 600, color: 'rgb(var(--text))' }}>Sources in this brain</h2>
+            <h2 style={{ margin: 0, fontSize: '0.875rem', fontWeight: 600, color: 'rgb(var(--text))' }}>Sources in this class</h2>
             <div className="flex gap-2 items-center">
-              <Link to={`/brain/${brainId}/sources`} className="text-link" style={{ fontSize: '0.75rem' }}>
+              <Link to={`/class/${classId}/sources`} className="text-link" style={{ fontSize: '0.75rem' }}>
                 Open files and previews
               </Link>
               <button
@@ -50,7 +50,7 @@ export default function BrainLanding({ brainName: brainNameProp }) {
             </div>
           </div>
           {sources.length === 0 ? (
-            <p style={{ fontSize: '0.875rem', color: 'rgb(var(--muted))' }}>No sources linked to this brain yet.</p>
+            <p style={{ fontSize: '0.875rem', color: 'rgb(var(--muted))' }}>No sources linked to this class yet.</p>
           ) : (
             <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
               {sources.map((s) => (
@@ -72,7 +72,7 @@ export default function BrainLanding({ brainName: brainNameProp }) {
                     type="button"
                     disabled={deleteSource.isPending}
                     onClick={() => {
-                      if (!window.confirm(`Remove source “${s.filename}” from this brain? Notes stay; only the file link is removed.`))
+                      if (!window.confirm(`Remove source “${s.filename}” from this class? Notes stay; only the file link is removed.`))
                         return;
                       deleteSource.mutate(s.id);
                     }}

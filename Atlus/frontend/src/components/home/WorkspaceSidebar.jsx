@@ -30,7 +30,7 @@ export default function WorkspaceSidebar({
     {
       id: 'sources',
       label: 'Sources',
-      path: brainForNav ? `/brain/${brainForNav.id}/sources` : null,
+      path: brainForNav ? `/class/${brainForNav.id}/sources` : null,
       disabled: !brainForNav,
     },
     { id: 'ingest', label: 'Ingest', path: '/ingest', badge: 'New' },
@@ -66,7 +66,7 @@ export default function WorkspaceSidebar({
                 type="button"
                 onClick={go}
                 disabled={item.disabled}
-                title={item.disabled ? 'Select a brain below first' : undefined}
+                title={item.disabled ? 'Select a class below first' : undefined}
                 className={`workspace-nav-btn ${active ? 'is-active' : ''}`}
               >
                 {sidebarExpanded ? <span>{item.label}</span> : <span style={{ fontSize: '0.75rem' }}>•</span>}
@@ -96,16 +96,16 @@ export default function WorkspaceSidebar({
               activeBrainId={activeBrain?.id}
               onEnterBrain={(brain) => {
                 setActiveBrain(brain);
-                navigate(`/brain/${brain.id}/notes`);
+                navigate(`/class/${brain.id}/notes`);
               }}
               onBrainRemoved={(id) => {
                 if (activeBrain?.id === id) setActiveBrain(null);
-                if (pathname.includes(`/brain/${id}`)) navigate('/home');
+                if (pathname.includes(`/class/${id}`)) navigate('/home');
               }}
             />
           </div>
         ) : (
-          <div style={{ padding: '0.5rem', textAlign: 'center', fontSize: '0.75rem', color: 'var(--text3)' }}>Brains</div>
+          <div style={{ padding: '0.5rem', textAlign: 'center', fontSize: '0.75rem', color: 'var(--text3)' }}>Classes</div>
         )}
       </div>
     </aside>

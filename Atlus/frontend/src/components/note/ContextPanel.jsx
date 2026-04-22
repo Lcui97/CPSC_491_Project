@@ -8,11 +8,11 @@ const TABS = [
 ];
 
 export default function ContextPanel({ nodeId }) {
-  const { brainId } = useParams();
+  const { classId } = useParams();
   const [tab, setTab] = useState('sources');
   const { data: node } = useNode(nodeId);
-  const { data: sources = [] } = useBrainSources(brainId);
-  const deleteSource = useDeleteSource(brainId);
+  const { data: sources = [] } = useBrainSources(classId);
+  const deleteSource = useDeleteSource(classId);
 
   const sourceForNote =
     node?.source_file_id != null ? sources.find((s) => s.id === node.source_file_id) : null;
@@ -47,7 +47,7 @@ export default function ContextPanel({ nodeId }) {
           <div>
             <h4 className="context-section-title">INGESTED FILES</h4>
             <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-              {sources.length === 0 && <li style={{ fontSize: '0.75rem', color: 'var(--text3)' }}>No sources in this brain yet.</li>}
+              {sources.length === 0 && <li style={{ fontSize: '0.75rem', color: 'var(--text3)' }}>No sources in this class yet.</li>}
               {sources.map((s) => (
                 <li
                   key={s.id}
@@ -59,10 +59,10 @@ export default function ContextPanel({ nodeId }) {
                   </div>
                   <button
                     type="button"
-                    disabled={!brainId || deleteSource.isPending}
+                    disabled={!classId || deleteSource.isPending}
                     onClick={() => {
-                      if (!brainId) return;
-                      if (!window.confirm(`Remove “${s.filename}” from this brain?`)) return;
+                      if (!classId) return;
+                      if (!window.confirm(`Remove “${s.filename}” from this class?`)) return;
                       deleteSource.mutate(s.id);
                     }}
                     style={{
@@ -72,8 +72,8 @@ export default function ContextPanel({ nodeId }) {
                       color: '#f87171',
                       border: 'none',
                       background: 'none',
-                      cursor: !brainId || deleteSource.isPending ? 'not-allowed' : 'pointer',
-                      opacity: !brainId || deleteSource.isPending ? 0.4 : 1,
+                      cursor: !classId || deleteSource.isPending ? 'not-allowed' : 'pointer',
+                      opacity: !classId || deleteSource.isPending ? 0.4 : 1,
                     }}
                   >
                     Remove
@@ -115,8 +115,8 @@ export default function ContextPanel({ nodeId }) {
                 <dd style={{ margin: 0, color: 'var(--text2)' }}>{node.updated_at ? new Date(node.updated_at).toLocaleString() : '—'}</dd>
               </div>
               <div style={{ marginBottom: '0.5rem' }}>
-                <dt className="context-section-title">BRAIN</dt>
-                <dd className="mono" style={{ margin: 0, color: 'var(--text2)', fontSize: '0.75rem' }}>{brainId}</dd>
+                <dt className="context-section-title">CLASS</dt>
+                <dd className="mono" style={{ margin: 0, color: 'var(--text2)', fontSize: '0.75rem' }}>{classId}</dd>
               </div>
               <div style={{ marginBottom: '0.5rem' }}>
                 <dt className="context-section-title">NOTE ID</dt>

@@ -52,7 +52,7 @@ export default function NotesGallery() {
             <div style={{ flex: 1 }}>
               <h1 style={{ fontSize: '1.25rem', fontWeight: 600, color: 'var(--text1)', margin: 0 }}>All notes</h1>
               <p style={{ fontSize: '0.875rem', color: 'var(--text2)', marginTop: '0.25rem' }}>
-                {total} note{total === 1 ? '' : 's'} across your brains · open to edit or delete
+                {total} note{total === 1 ? '' : 's'} across your classes · open to edit or delete
               </p>
             </div>
             <div className="flex flex-wrap gap-2 items-center">
@@ -78,7 +78,7 @@ export default function NotesGallery() {
             <p className="text-muted">Loading…</p>
           ) : nodes.length === 0 ? (
             <div style={{ borderRadius: '0.75rem', border: '1px dashed var(--hairline-strong)', padding: '2.5rem', textAlign: 'center' }}>
-              <p style={{ color: 'var(--text2)' }}>No notes yet. Create a brain and add notes from the workspace.</p>
+              <p style={{ color: 'var(--text2)' }}>No notes yet. Create a class and add notes from the workspace.</p>
               <button type="button" onClick={() => navigate('/home')} className="btn btn-primary" style={{ marginTop: '1rem' }}>
                 Back to home
               </button>
@@ -106,7 +106,7 @@ export default function NotesGallery() {
                     <div className="flex items-start justify-between gap-2">
                       <button
                         type="button"
-                        onClick={() => navigate(`/brain/${n.brain_id}/notes/${n.id}`)}
+                        onClick={() => navigate(`/class/${n.brain_id}/notes/${n.id}`)}
                         className="text-left flex-1 min-w-0"
                         style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}
                       >
@@ -136,7 +136,7 @@ export default function NotesGallery() {
                       <span className="mono" style={{ fontSize: '10px', color: 'var(--text3)' }}>{dateStr}</span>
                       <button
                         type="button"
-                        onClick={() => navigate(`/brain/${n.brain_id}/notes/${n.id}`)}
+                        onClick={() => navigate(`/class/${n.brain_id}/notes/${n.id}`)}
                         className="text-link"
                         style={{ fontSize: '0.75rem', fontWeight: 500 }}
                       >

@@ -1,4 +1,4 @@
-/** After OCR: image (or object URL) on the left, editable markdown on the right. */
+// split view: picture on left, typing on right after ocr
 export default function HandwrittenNotesSplitView({
   imageUrl,
   imageFile,

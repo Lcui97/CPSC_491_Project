@@ -1,4 +1,4 @@
-"""ORM models for workspaces (brains), uploaded files, notes, sharing, and calendar rows."""
+# sqlalchemy models - sorry the table is still called brains lol
 from app.extensions import db
 
 
@@ -7,9 +7,9 @@ class Brain(db.Model):
 
     id = db.Column(db.String(64), primary_key=True)
     name = db.Column(db.String(255), nullable=False)
-    badge = db.Column(db.String(32), nullable=False, default="Notes")  # UI label flavour
+    badge = db.Column(db.String(32), nullable=False, default="Notes")  # notes vs textbook badge
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
-    seed_nodes_created = db.Column(db.Boolean, nullable=False, default=False)  # welcome notes already inserted
+    seed_nodes_created = db.Column(db.Boolean, nullable=False, default=False)  # dont spam starter notes twice
     created_at = db.Column(db.DateTime(timezone=True), server_default=db.func.now())
 
     user = db.relationship("User", backref=db.backref("brains", lazy="dynamic"))
@@ -20,13 +20,13 @@ class Brain(db.Model):
 
 
 class SourceFile(db.Model):
-    """Something the user uploaded against a brain (PDF, scan, etc.)."""
+    """uploaded pdf / scan row"""
     __tablename__ = "source_files"
 
     id = db.Column(db.Integer, primary_key=True)
     brain_id = db.Column(db.String(64), db.ForeignKey("brains.id"), nullable=False, index=True)
     filename = db.Column(db.String(512), nullable=False)
-    file_type = db.Column(db.String(32), nullable=False)  # pdf, image, text, …
+    file_type = db.Column(db.String(32), nullable=False)  # pdf image etc
     storage_path = db.Column(db.String(1024), nullable=True)  # relative path under uploads/, if any
     created_at = db.Column(db.DateTime(timezone=True), server_default=db.func.now())
 
@@ -41,14 +41,14 @@ class SourceFile(db.Model):
 
 
 class CalendarEvent(db.Model):
-    """Due date row — from syllabus import or typed in by the user."""
+    """assignment / exam due date"""
     __tablename__ = "calendar_events"
 
     id = db.Column(db.Integer, primary_key=True)
     brain_id = db.Column(db.String(64), db.ForeignKey("brains.id"), nullable=False, index=True)
     source_file_id = db.Column(db.Integer, db.ForeignKey("source_files.id"), nullable=True, index=True)
     title = db.Column(db.String(512), nullable=False)
-    event_type = db.Column(db.String(32), nullable=False, default="other")  # quiz, midterm, …
+    event_type = db.Column(db.String(32), nullable=False, default="other")  # quiz midterm whatever
     due_at = db.Column(db.DateTime(timezone=True), nullable=False, index=True)
     course_label = db.Column(db.String(128), nullable=True)
     confidence = db.Column(db.Float, nullable=True)
@@ -58,7 +58,7 @@ class CalendarEvent(db.Model):
 
 
 class CourseProfile(db.Model):
-    """Canvas-like class metadata extracted from syllabus or entered manually."""
+    """professor / room / meeting times from form"""
     __tablename__ = "course_profiles"
 
     id = db.Column(db.Integer, primary_key=True)
@@ -76,7 +76,7 @@ class CourseProfile(db.Model):
 
 
 class Node(db.Model):
-    """A note or an auto-generated chunk from a textbook — title, markdown body, tags."""
+    """one note (or auto chunk from book)"""
     __tablename__ = "nodes"
 
     id = db.Column(db.String(64), primary_key=True)
@@ -85,21 +85,21 @@ class Node(db.Model):
 
     title = db.Column(db.String(512), nullable=False)
     summary = db.Column(db.Text, nullable=True)
-    raw_content = db.Column(db.Text, nullable=True)  # older pipeline text
-    markdown_content = db.Column(db.Text, nullable=True)  # what the editor shows
+    raw_content = db.Column(db.Text, nullable=True)  # old format backup
+    markdown_content = db.Column(db.Text, nullable=True)  # main editor text
     concepts = db.Column(db.JSON, nullable=True)
     section_title = db.Column(db.String(512), nullable=True)
     tags = db.Column(db.JSON, nullable=True)
-    node_type = db.Column(db.String(32), nullable=True, default="note")  # note, handwritten, seed, …
+    node_type = db.Column(db.String(32), nullable=True, default="note")  # handwritten seed etc
     embedding_id = db.Column(db.String(256), nullable=True, index=True)
     metadata_json = db.Column(db.JSON, nullable=True)
     created_at = db.Column(db.DateTime(timezone=True), server_default=db.func.now())
     updated_at = db.Column(db.DateTime(timezone=True), server_default=db.func.now(), onupdate=db.func.now())
-    related_node_ids = db.Column(db.JSON, nullable=True)  # legacy; unused
+    related_node_ids = db.Column(db.JSON, nullable=True)  # was gonna use links - not really
 
 
 class BrainShareLink(db.Model):
-    """Random token the owner hands out so others can join."""
+    """share url token"""
     __tablename__ = "brain_share_links"
 
     id = db.Column(db.Integer, primary_key=True)
@@ -110,7 +110,7 @@ class BrainShareLink(db.Model):
 
 
 class BrainCollaborator(db.Model):
-    """Someone who joined via invite — not the owner."""
+    """friend who clicked invite link"""
     __tablename__ = "brain_collaborators"
 
     id = db.Column(db.Integer, primary_key=True)

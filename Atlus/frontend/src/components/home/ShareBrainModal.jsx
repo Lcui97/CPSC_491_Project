@@ -52,7 +52,7 @@ export default function ShareBrainModal({ brain, onClose }) {
       <div className="modal-card modal-card-sm" onClick={(e) => e.stopPropagation()} role="dialog">
         <div className="flex items-center justify-between" style={{ marginBottom: '1rem' }}>
           <h2 className="modal-card-title" style={{ fontSize: '1.125rem' }}>
-            Share brain
+            Share class
           </h2>
           <button type="button" onClick={onClose} className="modal-close-btn" aria-label="Close">
             ×
@@ -75,7 +75,7 @@ export default function ShareBrainModal({ brain, onClose }) {
           </div>
         )}
         <p style={{ marginTop: '0.75rem', fontSize: '0.75rem', color: 'rgb(var(--muted))' }}>
-          Recipients open the link, sign in, and tap Join brain to add it to their workspace.
+          Recipients open the link, sign in, and tap Join class to add it to their workspace.
         </p>
       </div>
     </div>

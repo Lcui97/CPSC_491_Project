@@ -25,7 +25,7 @@ function timeGreeting() {
   return 'Evening';
 }
 
-/** Pacific time for message headers (America/Los_Angeles). */
+// timestamps in LA time bc thats what we picked
 function formatMessageTimePacific(ts) {
   try {
     return new Intl.DateTimeFormat('en-US', {
@@ -63,7 +63,7 @@ function IconMic(props) {
   );
 }
 
-/** Shared class planner assistant UI — full page or embedded slide-over. */
+// big assistant chat - also works squished in the slide panel
 export default function ClassAssistantChat({ embedded = false }) {
   const { data: me } = useMeSummary();
   const classAssistant = useClassesAssistant();

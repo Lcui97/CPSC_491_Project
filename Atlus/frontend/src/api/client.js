@@ -1,4 +1,4 @@
-/** fetch wrapper: attaches JWT, JSON headers, and bounces to /login on 401. */
+// wraps fetch - adds auth header + if 401 kicks u back to login
 const API_URL = import.meta.env.VITE_API_URL ?? '';
 
 function clearTokensAndGoToLogin() {
@@ -49,7 +49,7 @@ export async function api(path, options = {}) {
   return data;
 }
 
-/** POST JSON, receive MP3 blob (OpenAI text-to-speech). */
+// text -> mp3 from backend tts
 export async function apiAudioTts(text, voice = 'alloy', signal) {
   const token = localStorage.getItem('access_token');
   const headers = { 'Content-Type': 'application/json' };
@@ -84,7 +84,7 @@ export async function apiAudioTts(text, voice = 'alloy', signal) {
   return res.blob();
 }
 
-/** Multipart upload: audio blob → OpenAI Whisper JSON { text }. */
+// send audio recording, get back json w text
 export async function apiAudioTranscribe(blob) {
   const token = localStorage.getItem('access_token');
   const form = new FormData();
@@ -117,7 +117,7 @@ export async function apiAudioTranscribe(blob) {
   return data;
 }
 
-/** Multipart POST — optional extra form fields plus files[] or single file. */
+// form upload - can send extra fields + file(s)
 export async function apiUpload(path, fields = {}, files = []) {
   const form = new FormData();
   Object.entries(fields).forEach(([k, v]) => {
@@ -131,10 +131,7 @@ export async function apiUpload(path, fields = {}, files = []) {
   return api(path, { method: 'POST', body: form });
 }
 
-/**
- * Multipart POST with upload progress callback (0-100).
- * Uses XHR because fetch doesn't expose upload progress.
- */
+// same as apiUpload but xhr so we can show % bar (fetch cant do that lol)
 export function apiUploadWithProgress(path, fields = {}, files = [], onProgress = null) {
   const form = new FormData();
   Object.entries(fields).forEach(([k, v]) => {

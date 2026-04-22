@@ -24,7 +24,7 @@ export default function KnowledgeGapAnalysis() {
           <div className="panel-rgb">
             <h2 style={{ fontSize: '0.875rem', fontWeight: 500, margin: '0 0 0.75rem', color: 'rgb(var(--text))' }}>Notes</h2>
             <p style={{ fontSize: '0.875rem', color: 'rgb(var(--muted))' }}>
-              Select a notes brain or upload notes to compare against your textbook.
+              Select a class (or upload notes) to compare against your textbook.
             </p>
             <div style={{ marginTop: '1rem', padding: '2rem', border: '2px dashed rgb(var(--border))', borderRadius: '0.5rem', textAlign: 'center', color: 'rgb(var(--muted))', fontSize: '0.875rem' }}>
               Notes selector — coming soon
@@ -34,7 +34,7 @@ export default function KnowledgeGapAnalysis() {
           <div className="panel-rgb">
             <h2 style={{ fontSize: '0.875rem', fontWeight: 500, margin: '0 0 0.75rem', color: 'rgb(var(--text))' }}>Textbook</h2>
             <p style={{ fontSize: '0.875rem', color: 'rgb(var(--muted))' }}>
-              Select a textbook brain to compare with your notes.
+              Select a textbook class to compare with your notes.
             </p>
             <div style={{ marginTop: '1rem', padding: '2rem', border: '2px dashed rgb(var(--border))', borderRadius: '0.5rem', textAlign: 'center', color: 'rgb(var(--muted))', fontSize: '0.875rem' }}>
               Textbook selector — coming soon

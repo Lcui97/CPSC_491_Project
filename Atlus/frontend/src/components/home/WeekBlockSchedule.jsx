@@ -1,19 +1,16 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-/** Column order Sun → Sat (matches Date.getDay()). */
+// same order as Date.getDay() 0=sun
 const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-/**
- * Expand common syllabus / registrar abbreviations before day-name parsing.
- * Examples: MoWe → Mon+Wed, TuTh / TTh → Tue+Thu, TR → Tue+Thu, MWF → Mon+Wed+Fri.
- */
+// turns crummy registrar text (MWF, TTh, etc) into real day words so we can parse it
 export function normalizeMeetingDaysString(raw) {
   if (!raw || typeof raw !== 'string') return '';
   let s = raw.trim();
   if (!s) return '';
 
-  // Longest concatenated patterns first (order matters).
+  // do the long matches first or it messes up
   s = s.replace(/MoWeFr/gi, 'Monday Wednesday Friday');
   s = s.replace(/MoWe/gi, 'Monday Wednesday');
   s = s.replace(/TuTh|TTh|Tuth/gi, 'Tuesday Thursday');
@@ -22,16 +19,16 @@ export function normalizeMeetingDaysString(raw) {
   s = s.replace(/ThFr/gi, 'Thursday Friday');
   s = s.replace(/MoTu/gi, 'Monday Tuesday');
 
-  // Space- or punctuation-separated letter codes (TR = Tue/Thu in US college notation).
+  // T R with comma = tuesday thursday at a lot of schools
   s = s.replace(/\bT\s*[,/&]\s*R\b/gi, 'Tuesday Thursday');
   s = s.replace(/\bT\s*[,/&]\s*Th\b/gi, 'Tuesday Thursday');
 
-  // Standalone bundles.
+  // single tokens
   s = s.replace(/\bMWF\b/gi, 'Monday Wednesday Friday');
   s = s.replace(/\bMW\b/gi, 'Monday Wednesday');
   s = s.replace(/\bTR\b/gi, 'Tuesday Thursday');
 
-  // Two-letter day tokens (campus shorthand); word boundaries avoid breaking "Tuesday".
+  // Mo Tu We ... dont break the word tuesday lol
   s = s.replace(/\bMo\b/g, 'Monday');
   s = s.replace(/\bTu\b/g, 'Tuesday');
   s = s.replace(/\bWe\b/g, 'Wednesday');
@@ -43,7 +40,7 @@ export function normalizeMeetingDaysString(raw) {
   return s.trim();
 }
 
-/** M T W R F S U → Date.getDay() — u=Sunday, m=Monday, …, s=Saturday (R = Thursday). */
+// weird letter grid some syllabi use (R = thursday not tuesday)
 function addCompactLetterCodes(originalRaw, days) {
   const stripped = originalRaw.replace(/[^mtwrfsu]/gi, '').toLowerCase();
   if (stripped.length < 1 || stripped.length > 14) return;
@@ -55,9 +52,7 @@ function addCompactLetterCodes(originalRaw, days) {
   }
 }
 
-/**
- * @returns {Set<number>} weekday indices matching Date.getDay(): 0 = Sunday … 6 = Saturday
- */
+// gives you a set of 0-6 for which days class meets
 export function parseMeetingDaysToIndices(raw) {
   const days = new Set();
   if (!raw || typeof raw !== 'string') return days;
@@ -112,7 +107,7 @@ function cardThemeIndex(cls) {
   return acc % 6;
 }
 
-/** Rough ordering within a column: earlier times first when parsable */
+// sort earlier class time first when we can read the string
 function meetingTimeSortKey(timeStr) {
   if (!timeStr?.trim()) return 1440;
   const m = timeStr.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
@@ -236,7 +231,7 @@ export default function WeekBlockSchedule({ classes = [] }) {
                       key={cls.id}
                       type="button"
                       className={`week-schedule-block t${cardThemeIndex(cls)}`}
-                      onClick={() => navigate(`/brain/${cls.id}/notes`)}
+                      onClick={() => navigate(`/class/${cls.id}/notes`)}
                       title={`Open ${cls.title || headline}`}
                     >
                       <span className="week-schedule-block-title">{headline}</span>

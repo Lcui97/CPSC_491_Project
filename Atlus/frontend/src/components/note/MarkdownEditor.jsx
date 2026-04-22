@@ -54,7 +54,7 @@ export default function MarkdownEditor({
   metadata = null,
   sourceLabel = '',
   saveStatus = 'idle',
-  totalNotesInBrain = null,
+  totalNotesInClass = null,
 }) {
   const [mode, setMode] = useState('split');
   const [local, setLocal] = useState(value);
@@ -218,9 +218,9 @@ export default function MarkdownEditor({
                   {metadata.dateLabel}
                 </button>
               ) : null}
-              {metadata.brainName ? (
+              {metadata.classLabel ? (
                 <button type="button" className="md-meta-chip">
-                  {metadata.brainName}
+                  {metadata.classLabel}
                 </button>
               ) : null}
               {(metadata.tags || []).slice(0, 6).map((t) => (
@@ -282,7 +282,7 @@ export default function MarkdownEditor({
       <div className="md-footer-bar">
         <span className="mono">
           {words} words
-          {totalNotesInBrain != null ? ` · ${totalNotesInBrain} notes in brain` : ''}
+          {totalNotesInClass != null ? ` · ${totalNotesInClass} notes in class` : ''}
           {sourceLabel ? ` · ${sourceLabel}` : ''}
         </span>
         <span

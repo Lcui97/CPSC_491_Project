@@ -59,7 +59,7 @@ export default function BrainCreateModal({ onClose, onCreated }) {
     setError(null);
     setCreating(true);
     try {
-      const payload = { name: (name || 'New Brain').trim(), badge };
+      const payload = { name: (name || 'New class').trim(), badge };
       let brain;
       if (documentFiles.length > 0) {
         brain = await apiUpload('/api/brain/create', payload, documentFiles);
@@ -83,7 +83,7 @@ export default function BrainCreateModal({ onClose, onCreated }) {
         onClose();
       }
     } catch (err) {
-      setError(err.message || 'Failed to create brain');
+      setError(err.message || 'Failed to create class');
     } finally {
       setCreating(false);
     }
@@ -169,7 +169,7 @@ export default function BrainCreateModal({ onClose, onCreated }) {
       <div className="modal-card" onClick={(e) => e.stopPropagation()} role="dialog">
         <div className="modal-card-header">
           <h2 className="modal-card-title">
-            {showHandwrittenStep ? 'Handwritten note' : 'Create Brain'}
+            {showHandwrittenStep ? 'Handwritten note' : 'Create class'}
           </h2>
           <button type="button" onClick={onClose} className="modal-close-btn" aria-label="Close">
             ✕
@@ -315,7 +315,7 @@ export default function BrainCreateModal({ onClose, onCreated }) {
               className="btn-sm-ocr"
               style={{ padding: '0.5rem 1rem', opacity: creating ? 0.6 : 1 }}
             >
-              {creating ? 'Creating…' : 'Create Brain'}
+              {creating ? 'Creating…' : 'Create class'}
             </button>
           </div>
         ) : null}

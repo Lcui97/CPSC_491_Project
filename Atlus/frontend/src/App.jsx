@@ -49,7 +49,7 @@ function App() {
         }
       />
       <Route
-        path="/brain"
+        path="/class"
         element={
           <ProtectedRoute>
             <Brain />
@@ -57,7 +57,7 @@ function App() {
         }
       />
       <Route
-        path="/brain/:brainId/notes"
+        path="/class/:classId/notes"
         element={
           <ProtectedRoute>
             <NoteView />
@@ -65,7 +65,7 @@ function App() {
         }
       />
       <Route
-        path="/brain/:brainId/notes/:nodeId"
+        path="/class/:classId/notes/:nodeId"
         element={
           <ProtectedRoute>
             <NoteView />
@@ -73,7 +73,7 @@ function App() {
         }
       />
       <Route
-        path="/brain/:brainId/sources"
+        path="/class/:classId/sources"
         element={
           <ProtectedRoute>
             <BrainSourcesView />
@@ -89,7 +89,7 @@ function App() {
         }
       />
       <Route
-        path="/brain/:brainId/calendar"
+        path="/class/:classId/calendar"
         element={
           <ProtectedRoute>
             <CalendarPage />

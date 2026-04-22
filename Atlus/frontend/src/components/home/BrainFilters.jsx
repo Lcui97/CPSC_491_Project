@@ -7,8 +7,8 @@ import { useDeleteBrain, useLeaveBrain } from '../../api/brainQueries';
 const BRAINS_STORAGE_KEY = 'atlus_brains';
 
 const INITIAL_BRAINS = [
-  { id: '1', name: 'Notes Brain', badge: 'Notes' },
-  { id: '2', name: 'Textbook Brain', badge: 'Textbook' },
+  { id: '1', name: 'Notes class', badge: 'Notes' },
+  { id: '2', name: 'Textbook class', badge: 'Textbook' },
   { id: '3', name: 'Combined View', badge: 'Compare' },
 ];
 
@@ -88,13 +88,13 @@ export default function BrainFilters({ activeBrainId, onEnterBrain, onCollapseSi
       }
       deleteBrain.mutate(brain.id, {
         onSuccess: () => syncLocal(brain.id),
-        onError: (err) => window.alert(err.message || 'Could not delete brain'),
+        onError: (err) => window.alert(err.message || 'Could not delete class'),
       });
     } else {
       if (!window.confirm(`Leave “${brain.name}”? You can rejoin only if someone shares it again.`)) return;
       leaveBrain.mutate(brain.id, {
         onSuccess: () => syncLocal(brain.id),
-        onError: (err) => window.alert(err.message || 'Could not leave brain'),
+        onError: (err) => window.alert(err.message || 'Could not leave class'),
       });
     }
   }
@@ -111,7 +111,7 @@ export default function BrainFilters({ activeBrainId, onEnterBrain, onCollapseSi
   return (
     <div className="brain-filters-panel">
       <div className="brain-filters-head">
-        <h2 className="brain-filters-title">My Brains</h2>
+        <h2 className="brain-filters-title">My classes</h2>
 
         <div className="brain-filters-tools">
           {onCollapseSidebar && (
@@ -127,7 +127,7 @@ export default function BrainFilters({ activeBrainId, onEnterBrain, onCollapseSi
             </button>
           )}
 
-          <button type="button" onClick={addBrain} className="brain-filters-add" title="Add brain">
+          <button type="button" onClick={addBrain} className="brain-filters-add" title="Add class">
             +
           </button>
         </div>
@@ -157,7 +157,7 @@ export default function BrainFilters({ activeBrainId, onEnterBrain, onCollapseSi
                   type="button"
                   onClick={(e) => handleShare(e, brain)}
                   className="brain-filter-icon-btn"
-                  title="Share brain"
+                  title="Share class"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <circle cx="18" cy="5" r="3" />
@@ -176,7 +176,7 @@ export default function BrainFilters({ activeBrainId, onEnterBrain, onCollapseSi
                 disabled={removePending}
                 onClick={() => handleRemoveBrain(brain)}
                 className="brain-filter-icon-btn danger"
-                title={brain.is_owner === false ? 'Leave shared brain' : 'Delete brain'}
+                title={brain.is_owner === false ? 'Leave shared class' : 'Delete class'}
               >
                 −
               </button>

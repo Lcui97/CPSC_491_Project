@@ -1,6 +1,4 @@
-# =============================================================================
-# OS / Editors
-# =============================================================================
+# random junk
 .DS_Store
 Thumbs.db
 Desktop.ini
@@ -8,16 +6,12 @@ ehthumbs.db
 
 .vscode/
 .idea/
+.cursor/
 *.swp
 *.swo
 *~
 
-# Local helper docs (optional; not part of the app)
-Atlus/.agents/
-
-# =============================================================================
-# Secrets / local env
-# =============================================================================
+# secrets
 Atlus/backend/.env
 Atlus/frontend/.env
 .env
@@ -28,9 +22,7 @@ Atlus/frontend/.env
 /env
 env/
 
-# =============================================================================
-# Backend (Flask / Python)
-# =============================================================================
+# python
 Atlus/backend/venv/
 Atlus/backend/.venv/
 Atlus/backend/env/
@@ -43,15 +35,12 @@ Atlus/backend/.ruff_cache/
 Atlus/backend/.coverage
 Atlus/backend/htmlcov/
 Atlus/backend/.python-version
-
-# Python packaging (anywhere)
 *.egg-info/
 build/
 dist/
 __pycache__/
 *.py[cod]
 
-# Local SQLite / runtime instance data
 Atlus/backend/instance/*.db
 Atlus/backend/instance/*.db-shm
 Atlus/backend/instance/*.db-wal
@@ -61,9 +50,7 @@ Atlus/backend/*.db
 Atlus/backend/*.sqlite
 Atlus/backend/*.sqlite3
 
-# =============================================================================
-# Frontend (React / Vite / Node)
-# =============================================================================
+# node / vite
 Atlus/frontend/node_modules/
 Atlus/frontend/dist/
 Atlus/frontend/.vite/
@@ -72,18 +59,12 @@ Atlus/frontend/.eslintcache
 Atlus/frontend/coverage/
 Atlus/frontend/*.tsbuildinfo
 
-# =============================================================================
-# Logs
-# =============================================================================
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# =============================================================================
-# Generated data / uploads
-# =============================================================================
 Atlus/data/
 Atlus/uploads/
 Atlus/backend/uploads/

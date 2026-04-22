@@ -25,11 +25,11 @@ export default function QuickActions() {
         </button>
         <button
           type="button"
-          onClick={() => navigate('/brain')}
+          onClick={() => navigate('/class')}
           className="btn btn-primary"
           style={{ width: '100%', justifyContent: 'flex-start' }}
         >
-          Open Brain Map
+          Open classes
         </button>
       </div>
     </div>

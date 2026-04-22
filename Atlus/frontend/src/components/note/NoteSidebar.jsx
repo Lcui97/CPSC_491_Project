@@ -32,7 +32,7 @@ function snippetFromNode(node) {
 }
 
 export default function NoteSidebar({ onSelectNode }) {
-  const { brainId, nodeId: activeNodeId } = useParams();
+  const { classId, nodeId: activeNodeId } = useParams();
   const navigate = useNavigate();
   const [q, setQ] = useState('');
   const [tagFilter, setTagFilter] = useState('');
@@ -41,13 +41,13 @@ export default function NoteSidebar({ onSelectNode }) {
   const page = 1;
   const perPage = 100;
 
-  const { data: brain } = useQuery({
+  const { data: classMeta } = useQuery({
     queryKey: ['brains'],
-    queryFn: () => api('/api/brain/list').then((r) => (r.brains || []).find((b) => b.id === brainId)),
-    enabled: !!brainId,
+    queryFn: () => api('/api/brain/list').then((r) => (r.brains || []).find((b) => b.id === classId)),
+    enabled: !!classId,
   });
-  const { data: listData, refetch } = useBrainNodes(brainId, { page, per_page: perPage, q, tag: tagFilter, sort });
-  const createNode = useCreateNode(brainId);
+  const { data: listData, refetch } = useBrainNodes(classId, { page, per_page: perPage, q, tag: tagFilter, sort });
+  const createNode = useCreateNode(classId);
   const deleteNode = useDeleteNode();
 
   const nodes = listData?.nodes ?? [];
@@ -68,11 +68,11 @@ export default function NoteSidebar({ onSelectNode }) {
 
   const handleSelect = (node) => {
     onSelectNode?.(node);
-    navigate(`/brain/${brainId}/notes/${node.id}`, { replace: false });
+    navigate(`/class/${classId}/notes/${node.id}`, { replace: false });
   };
 
   const handleNewNote = () => {
-    if (!brainId) return;
+    if (!classId) return;
     setCreateError('');
     createNode.mutate(
       {
@@ -83,7 +83,7 @@ export default function NoteSidebar({ onSelectNode }) {
       },
       {
         onSuccess: (data) => {
-          navigate(`/brain/${brainId}/notes/${data.id}`, { replace: false, state: { focusTitle: true } });
+          navigate(`/class/${classId}/notes/${data.id}`, { replace: false, state: { focusTitle: true } });
         },
         onError: (err) => {
           setCreateError(err.message || 'Failed to create note');
@@ -127,12 +127,12 @@ export default function NoteSidebar({ onSelectNode }) {
                     e.stopPropagation();
                     if (!window.confirm(`Delete “${node.title || 'Untitled'}”?`)) return;
                     deleteNode.mutate(
-                      { nodeId: node.id, brainId },
+                      { nodeId: node.id, brainId: classId },
                       {
                         onSuccess: () => {
                           refetch();
                           if (node.id === activeNodeId) {
-                            navigate(`/brain/${brainId}/notes`, { replace: true });
+                            navigate(`/class/${classId}/notes`, { replace: true });
                           }
                         },
                       }
@@ -171,7 +171,7 @@ export default function NoteSidebar({ onSelectNode }) {
         <button
           type="button"
           onClick={handleNewNote}
-          disabled={createNode.isPending || !brainId}
+          disabled={createNode.isPending || !classId}
           className="ns-new-btn"
           title="New note"
         >
@@ -194,8 +194,8 @@ export default function NoteSidebar({ onSelectNode }) {
         </select>
       </div>
       <nav className="note-sidebar-nav">
-        <p className="note-sidebar-brain-name" title={brain?.name}>
-          {brain?.name || '…'}
+        <p className="note-sidebar-class-name" title={classMeta?.name}>
+          {classMeta?.name || '…'}
         </p>
         <Section label="TODAY" items={grouped.today} />
         <Section label="YESTERDAY" items={grouped.yesterday} />

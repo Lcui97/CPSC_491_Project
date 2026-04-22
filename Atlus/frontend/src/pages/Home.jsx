@@ -22,7 +22,7 @@ function dateKeyFromIso(iso) {
   return `${y}-${m}-${day}`;
 }
 
-/** Course code (if any) + class title for global calendar rows. */
+// little subtitle line under calendar stuff (code + name)
 function upcomingEventClassLine(ev, titleById) {
   const code = (ev.course_label || '').trim();
   const title = (ev.brain_name || '').trim() || (titleById.get(String(ev.brain_id)) || '').trim();
@@ -32,7 +32,7 @@ function upcomingEventClassLine(ev, titleById) {
   return '';
 }
 
-/** e.g. "April 27" — month name + day; no year, no time. */
+// turns iso date into like "April 27" without the year
 function formatUpcomingWhen(iso) {
   const d = new Date(iso);
   return d.toLocaleDateString(undefined, { month: 'long', day: 'numeric' });
@@ -100,7 +100,7 @@ export default function Home() {
     return acc % 6;
   }
 
-  /** Small header line: course code + section only (title is shown larger below). */
+  // top of the card - class # and section only
   function formatClassCardMeta(profile) {
     if (!profile) return null;
     const num = (profile.class_number || '').trim();
@@ -146,7 +146,7 @@ export default function Home() {
     });
   }, [classes, classOrder]);
 
-  const brainTitleById = useMemo(() => {
+  const classTitleById = useMemo(() => {
     const m = new Map();
     orderedClasses.forEach((c) => {
       if (c?.id != null) m.set(String(c.id), (c.title || '').trim());
@@ -392,11 +392,11 @@ export default function Home() {
                     role="button"
                     tabIndex={0}
                     draggable
-                    onClick={() => navigate(`/brain/${cls.id}/notes`)}
+                    onClick={() => navigate(`/class/${cls.id}/notes`)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
-                        navigate(`/brain/${cls.id}/notes`);
+                        navigate(`/class/${cls.id}/notes`);
                       }
                     }}
                     onDragStart={(e) => {
@@ -456,7 +456,7 @@ export default function Home() {
                         className="class-dropdown"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <button type="button" onClick={() => navigate(`/brain/${cls.id}/notes`)}>Open</button>
+                        <button type="button" onClick={() => navigate(`/class/${cls.id}/notes`)}>Open</button>
                         <button
                           type="button"
                           onClick={() => {
@@ -475,7 +475,7 @@ export default function Home() {
                         >
                           Syllabus preview
                         </button>
-                        <button type="button" onClick={() => navigate(`/brain/${cls.id}/calendar`)}>Calendar</button>
+                        <button type="button" onClick={() => navigate(`/class/${cls.id}/calendar`)}>Calendar</button>
                         <button
                           type="button"
                           className="danger"
@@ -504,7 +504,7 @@ export default function Home() {
             ) : (
               <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                 {upcoming.slice(0, 50).map((ev) => {
-                  const classMeta = upcomingEventClassLine(ev, brainTitleById);
+                  const classMeta = upcomingEventClassLine(ev, classTitleById);
                   return (
                     <li key={ev.id} style={{ fontSize: '0.875rem', marginBottom: '0.5rem' }}>
                       {formatUpcomingWhen(ev.due_at)} — [{ev.event_type}] {ev.title}
@@ -597,7 +597,7 @@ export default function Home() {
                               <span className="cal-swatch" style={{ background: color }} />
                               <p className="cal-class-name">{label}</p>
                             </div>
-                            <button type="button" className="text-muted" style={{ border: 'none', background: 'none', cursor: 'pointer' }} onClick={() => navigate(`/brain/${cls.id}/calendar`)}>
+                            <button type="button" className="text-muted" style={{ border: 'none', background: 'none', cursor: 'pointer' }} onClick={() => navigate(`/class/${cls.id}/calendar`)}>
                               ⋮
                             </button>
                           </div>

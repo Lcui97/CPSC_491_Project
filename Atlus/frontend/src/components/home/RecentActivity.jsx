@@ -1,6 +1,6 @@
 const MOCK_ITEMS = [
   { label: 'Uploaded: Notes - Week 1', time: '2h ago' },
-  { label: 'Generated: Notes Brain', time: '1d ago' },
+  { label: 'Generated: Notes class', time: '1d ago' },
   { label: 'Compared: Notes vs Textbook', time: '2d ago' },
 ];
 

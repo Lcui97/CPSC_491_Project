@@ -9,7 +9,6 @@ export const brainKeys = {
   meActivity: (limit) => ['me', 'activity', limit],
   meNotes: (params) => ['me', 'notes', params],
   sources: (brainId) => ['brains', brainId, 'sources'],
-  calendarByBrain: (brainId, params) => ['brains', brainId, 'calendar-events', params],
   calendarGlobal: (params) => ['calendar-events', params],
   classes: () => ['classes'],
   syllabusPreview: (classId) => ['classes', classId, 'syllabus-preview'],
@@ -172,7 +171,7 @@ export function useBrainAsk(brainId) {
   return useMutation({
     mutationFn: (body) => {
       if (!brainId) {
-        return Promise.reject(new Error('Select a brain in the sidebar first.'));
+        return Promise.reject(new Error('Select a class in the sidebar first.'));
       }
       return api(`/api/brain/${brainId}/ask`, { method: 'POST', body: JSON.stringify(body) });
     },
@@ -180,21 +179,6 @@ export function useBrainAsk(brainId) {
       queryClient.invalidateQueries({ queryKey: brainKeys.sources(brainId) });
       queryClient.invalidateQueries({ queryKey: brainKeys.nodes(brainId, {}) });
     },
-  });
-}
-
-export function useBrainCalendarEvents(brainId, params = {}) {
-  const { start = '', end = '', type = '' } = params;
-  return useQuery({
-    queryKey: brainKeys.calendarByBrain(brainId, { start, end, type }),
-    queryFn: () => {
-      const search = new URLSearchParams();
-      if (start) search.set('start', start);
-      if (end) search.set('end', end);
-      if (type) search.set('type', type);
-      return api(`/api/brain/${brainId}/calendar-events${search.toString() ? `?${search}` : ''}`).then((r) => r.events || []);
-    },
-    enabled: !!brainId,
   });
 }
 
@@ -208,39 +192,6 @@ export function useGlobalCalendarEvents(params = {}) {
       if (end) search.set('end', end);
       if (type) search.set('type', type);
       return api(`/api/calendar-events${search.toString() ? `?${search}` : ''}`).then((r) => r.events || []);
-    },
-  });
-}
-
-export function useCreateCalendarEvent(brainId) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (body) => api(`/api/brain/${brainId}/calendar-events`, { method: 'POST', body: JSON.stringify(body) }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['brains', brainId, 'calendar-events'] });
-      queryClient.invalidateQueries({ queryKey: ['calendar-events'] });
-    },
-  });
-}
-
-export function useUpdateCalendarEvent(brainId) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ eventId, body }) => api(`/api/brain/${brainId}/calendar-events/${eventId}`, { method: 'PUT', body: JSON.stringify(body) }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['brains', brainId, 'calendar-events'] });
-      queryClient.invalidateQueries({ queryKey: ['calendar-events'] });
-    },
-  });
-}
-
-export function useDeleteCalendarEvent(brainId) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (eventId) => api(`/api/brain/${brainId}/calendar-events/${eventId}`, { method: 'DELETE' }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['brains', brainId, 'calendar-events'] });
-      queryClient.invalidateQueries({ queryKey: ['calendar-events'] });
     },
   });
 }

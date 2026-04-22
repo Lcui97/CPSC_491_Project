@@ -15,7 +15,7 @@ function readStoredScanWidth() {
   return DEFAULT_SCAN;
 }
 
-export default function HandwrittenSplitEditor({ brainId, sourceFileId, filename, fileType = 'image', children }) {
+export default function HandwrittenSplitEditor({ classId, sourceFileId, filename, fileType = 'image', children }) {
   const [url, setUrl] = useState(null);
   const [err, setErr] = useState(null);
   const [scanPx, setScanPx] = useState(readStoredScanWidth);
@@ -45,7 +45,7 @@ export default function HandwrittenSplitEditor({ brainId, sourceFileId, filename
   }, [isWide]);
 
   useEffect(() => {
-    if (!brainId || !sourceFileId) {
+    if (!classId || !sourceFileId) {
       setUrl(null);
       return;
     }
@@ -55,7 +55,7 @@ export default function HandwrittenSplitEditor({ brainId, sourceFileId, filename
     setErr(null);
     (async () => {
       try {
-        const res = await fetch(`${API_URL}/api/brain/${brainId}/sources/${sourceFileId}/file`, {
+        const res = await fetch(`${API_URL}/api/brain/${classId}/sources/${sourceFileId}/file`, {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         });
         if (!res.ok) {
@@ -80,7 +80,7 @@ export default function HandwrittenSplitEditor({ brainId, sourceFileId, filename
       revoked = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [brainId, sourceFileId, fileType]);
+  }, [classId, sourceFileId, fileType]);
 
   const onResizeMouseDown = useCallback(
     (e) => {

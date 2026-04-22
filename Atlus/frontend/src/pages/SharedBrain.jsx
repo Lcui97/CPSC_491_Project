@@ -25,7 +25,7 @@ export default function SharedBrain() {
     }
     setLoading(true);
     setLoadError(false);
-    fetch(`${API_URL}/api/share/brain/${id}`)
+    fetch(`${API_URL}/api/share/class/${id}`)
       .then((r) => {
         if (!r.ok) throw new Error('not found');
         return r.json();
@@ -48,10 +48,10 @@ export default function SharedBrain() {
     setJoinError(null);
     setJoining(true);
     try {
-      const data = await api(`/api/share/brain/${id}/join`, { method: 'POST', body: '{}' });
+      const data = await api(`/api/share/class/${id}/join`, { method: 'POST', body: '{}' });
       queryClient.invalidateQueries({ queryKey: brainKeys.list() });
       const bid = data.brain_id;
-      if (bid) navigate(`/brain/${bid}/notes`);
+      if (bid) navigate(`/class/${bid}/notes`);
       else navigate('/home');
     } catch (err) {
       setJoinError(err.message || 'Could not join');
@@ -122,14 +122,14 @@ export default function SharedBrain() {
             <span style={{ fontSize: '0.875rem', color: 'rgb(var(--muted))' }}>{brain.badge}</span>
           </div>
           <p style={{ fontSize: '0.875rem', color: 'rgb(var(--muted))', margin: '0 0 1.5rem', textAlign: 'center' }}>
-            You&apos;ve been invited to this brain. Sign in and join to open notes and handwritten scans.
+            You&apos;ve been invited to this class. Sign in and join to open notes and handwritten scans.
           </p>
           {joinError ? (
             <p style={{ fontSize: '0.875rem', color: 'var(--red)', textAlign: 'center', margin: '0 0 0.75rem' }}>{joinError}</p>
           ) : null}
           <div className="shared-actions">
             <button type="button" onClick={handleJoin} disabled={joining} className="shared-btn-primary">
-              {joining ? 'Joining…' : 'Join brain'}
+              {joining ? 'Joining…' : 'Join class'}
             </button>
             <button type="button" onClick={handleDownload} disabled={downloading} className="shared-btn-outline">
               {downloading ? 'Downloading…' : 'Download invite JSON'}

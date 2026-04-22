@@ -5,7 +5,7 @@ import { api } from '../../api/client';
 export default function QuickSwitcher() {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
-  const [brains, setBrains] = useState([]);
+  const [classesList, setClassesList] = useState([]);
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -33,27 +33,29 @@ export default function QuickSwitcher() {
 
   useEffect(() => {
     if (!open) return;
-    api('/api/brain/list').then((r) => setBrains(r.brains || [])).catch(() => setBrains([]));
+    api('/api/brain/list').then((r) => setClassesList(r.brains || [])).catch(() => setClassesList([]));
   }, [open]);
 
   useEffect(() => {
     if (!open) return;
     if (!q.trim()) {
-      setResults(brains.map((b) => ({ type: 'brain', id: b.id, title: b.name, brainId: b.id })));
+      setResults(classesList.map((b) => ({ type: 'class', id: b.id, title: b.name, classIdNav: b.id })));
       return;
     }
     setLoading(true);
     api(`/api/brain/search?q=${encodeURIComponent(q)}`)
-      .then((r) => setResults((r.results || []).map((n) => ({ type: 'node', id: n.id, title: n.title, brainId: n.brain_id }))))
+      .then((r) =>
+        setResults((r.results || []).map((n) => ({ type: 'node', id: n.id, title: n.title, classIdNav: n.brain_id })))
+      )
       .catch(() => setResults([]))
       .finally(() => setLoading(false));
-  }, [open, q, brains]);
+  }, [open, q, classesList]);
 
   const handleSelect = useCallback((item) => {
-    if (item.type === 'brain') {
-      navigate(`/brain/${item.brainId}/notes`);
+    if (item.type === 'class') {
+      navigate(`/class/${item.classIdNav}/notes`);
     } else {
-      navigate(`/brain/${item.brainId}/notes/${item.id}`);
+      navigate(`/class/${item.classIdNav}/notes/${item.id}`);
     }
     setOpen(false);
   }, [navigate]);
@@ -70,7 +72,7 @@ export default function QuickSwitcher() {
           type="text"
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Search brains and notes…"
+          placeholder="Search classes and notes…"
           className="qs-input"
           autoFocus
         />
@@ -83,7 +85,7 @@ export default function QuickSwitcher() {
                 type="button"
                 onClick={() => handleSelect(item)}
               >
-                <span className="mono" style={{ fontSize: '10px', color: 'var(--text3)' }}>{item.type === 'brain' ? 'Brain' : 'Note'}</span>
+                <span className="mono" style={{ fontSize: '10px', color: 'var(--text3)' }}>{item.type === 'class' ? 'Class' : 'Note'}</span>
                 {item.title || 'Untitled'}
               </button>
             </li>
